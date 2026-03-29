@@ -1,0 +1,188 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<package schemaVersion="1.7.28" xmlns:xs="http://www.w3.org/2001/XMLSchema-instance" xs:noNamespaceSchemaLocation="https://raw.githubusercontent.com/Open-CMSIS-Pack/Open-CMSIS-Pack-Spec/v1.7.28/schema/PACK.xsd">
+  <vendor>gzbkey</vendor>
+  <name>LingDongGUI</name>
+  <description>A gui based on arm-2d.</description>
+  <url>https://github.com/gzbkey/LingDongGUI/</url>
+  <supportContact>https://github.com/gzbkey/LingDongGUI/issues</supportContact>
+  <license>LICENSE</license>
+  <repository type="git">https://github.com/gzbkey/LingDongGUI.git</repository>
+  <releases>
+    <release version="9.9.9" tag="v9.9.9">
+      Active development ...
+    </release>
+  </releases>
+
+  <keywords>
+    <!-- keywords for indexing -->
+    <keyword>GUI</keyword>
+    <keyword>LDGUI</keyword>
+    <keyword>LingDongGUI</keyword>
+  </keywords>
+
+  <conditions>
+    <condition id="Arm-2D">
+      <description>Require Arm-2D Support</description>
+      <require Cclass="Acceleration" Cgroup="Arm-2D" Csub="Core" />
+      <require Cclass="Acceleration" Cgroup="Arm-2D" Csub="Alpha-Blending" />
+      <require Cclass="Acceleration" Cgroup="Arm-2D" Csub="Transform" />
+      <require Cclass="Acceleration" Cgroup="Arm-2D Helper" Csub="PFB" />
+      <require Cclass="Acceleration" Cgroup="Arm-2D Extras" Csub="LCD ASCII Printf" />
+      <require Cclass="Acceleration" Cgroup="Arm-2D Extras" Csub="Controls" />
+    </condition>
+  </conditions>
+
+  <components>
+    <component Cclass="LingDongGui" Cgroup="ldgui" Cversion="0.8.1" condition="Arm-2D">
+      <description>ldgui core files</description>
+      <files>
+        <file category="include" name="src/gui/" />
+        <file category="sourceC" name="src/gui/ldAnimation.c" />
+        <file category="sourceC" name="src/gui/ldArc.c" />
+        <file category="sourceC" name="src/gui/ldBase.c" />
+        <file category="sourceC" name="src/gui/ldButton.c" />
+        <file category="sourceC" name="src/gui/ldCheckBox.c" />
+        <file category="sourceC" name="src/gui/ldComboBox.c" />
+        <file category="sourceC" name="src/gui/ldDateTime.c" />
+        <file category="sourceC" name="src/gui/ldGauge.c" />
+        <file category="sourceC" name="src/gui/ldGraph.c" />
+        <file category="sourceC" name="src/gui/ldGui.c" />
+        <file category="sourceC" name="src/gui/ldIconSlider.c" />
+        <file category="sourceC" name="src/gui/ldImage.c" />
+        <file category="sourceC" name="src/gui/ldKeyboard.c" />
+        <file category="sourceC" name="src/gui/ldLabel.c" />
+        <file category="sourceC" name="src/gui/ldLineEdit.c" />
+        <file category="sourceC" name="src/gui/ldList.c" />
+        <file category="sourceC" name="src/gui/ldMessageBox.c" />
+        <file category="sourceC" name="src/gui/ldProgressBar.c" />
+        <file category="sourceC" name="src/gui/ldQRCode.c" />
+        <file category="sourceC" name="src/gui/ldRadialMenu.c" />
+        <file category="sourceC" name="src/gui/ldScene0.c" />
+        <file category="sourceC" name="src/gui/ldScene1.c" />
+        <file category="sourceC" name="src/gui/ldScrollSelecter.c" />
+        <file category="sourceC" name="src/gui/ldSlider.c" />
+        <file category="sourceC" name="src/gui/ldTable.c" />
+        <file category="sourceC" name="src/gui/ldText.c" />
+
+        <file category="include" name="src/misc/" />
+        <file category="sourceC" name="src/misc/freeRtosHeap4.c" />
+        <file category="sourceC" name="src/misc/ldMsg.c" />
+        <file category="sourceC" name="src/misc/tlsf.c" />
+        <file category="sourceC" name="src/misc/xQueue.c" />
+        <file category="sourceC" name="src/misc/xString.c" />
+        <file category="sourceC" name="src/misc/xBtnAction.c" />
+
+        <file category="sourceC" name="src/porting/ldConfig.c" attr="config" version="1.2.0" />
+        <file category="header"  name="src/porting/ldConfig.h" attr="config" version="1.4.2" />
+        <file category="sourceC" name="src/porting/arm_2d_disp_adapter_0.c" attr="config" version="1.0.0" />
+        <file category="header"  name="src/porting/arm_2d_disp_adapter_0.h" attr="config" version="1.0.0" />
+      </files>
+      <RTE_Components_h>
+#define __ARM_2D_USER_APP_CFG_H__ "ldConfig.h"
+#define RTE_Acceleration_Arm_2D_Helper_Disp_Adapter0
+      </RTE_Components_h>
+    </component>
+    <component Cclass="LingDongGui Demo" Cgroup="startup" Cversion="1.0.0" condition="Arm-2D">
+      <description>ldgui demo</description>
+      <files>
+        <file category="include" name="examples/common/demo/" />
+        <file category="include" name="examples/common/demo/startup/" />
+        <file category="sourceC" name="examples/common/demo/startup/uiStartup.c" version="1.0.0" />
+      </files>
+    </component>
+    <component Cclass="LingDongGui Demo" Cgroup="widget" Cversion="1.0.0" condition="Arm-2D">
+      <description>ldgui demo</description>
+      <files>
+        <file category="include" name="examples/common/demo/" />
+        <file category="include" name="examples/common/demo/widget/" />
+        <file category="include" name="examples/common/demo/widget/fonts/" />
+        <file category="include" name="examples/common/demo/widget/images/" />
+        <file category="sourceC" name="examples/common/demo/widget/uiWidget.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/widget/uiWidgetLogic.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/widget/fonts/arial_12.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/widget/fonts/arial_16.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/widget/images/arc_quarter.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/widget/images/arc_quarter_mask.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/widget/images/book.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/widget/images/chart.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/widget/images/Gauge.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/widget/images/gaugePointer.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/widget/images/indicator.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/widget/images/keyPress.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/widget/images/keyRelease.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/widget/images/letter_paper.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/widget/images/nature.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/widget/images/note.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/widget/images/ProgressBarBg.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/widget/images/ProgressBarFg.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/widget/images/slider.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/widget/images/weather.c" version="1.0.0" />
+      </files>
+    </component>
+    <component Cclass="LingDongGui Demo" Cgroup="printer" Cversion="1.0.0" condition="Arm-2D">
+      <description>ldgui demo</description>
+      <files>
+        <file category="include" name="examples/common/demo/" />
+        <file category="include" name="examples/common/demo/printer/" />
+        <file category="sourceC" name="examples/common/demo/printer/uiAbout.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/uiAxis.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/uiLogo.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/uiMain.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/uiNozzle.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/uiPrint.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/uiPrinting.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/uiReady.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/uiSet.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/abs.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/alarmClock.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/alarmClock_s.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/balance.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/blockRabbit.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/blockRabbit_s.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/brightness.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/cake.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/cake_s.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/doll.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/doll_s.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/height.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/light.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/mainBtnPrint.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/mainBtnReady.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/mainBtnSet.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/milk.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/milk_s.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/mug.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/mug_s.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/nozzleIcon1.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/nozzleIcon2.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/nozzleIcon3.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/percent.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/pid.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/pla.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/readyBtn1.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/readyBtn2.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/readyBtn3.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/readyBtn3_off.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/readyBtn4.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/readyBtn4_off.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/readyBtn5.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/smallRoom.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/smallRoom_s.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/speed.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/tabBtnPress.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/tabBtnRelease.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/temp1.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/temp2.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/voice.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/wifi.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/images/zero.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/fonts/AlibabaPuHuiTi_3_55_Regular_16.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/fonts/AlibabaPuHuiTi_3_55_Regular_18.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/fonts/AlibabaPuHuiTi_3_55_Regular_20.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/fonts/AlibabaPuHuiTi_3_55_Regular_24.c" version="1.0.0" />
+        <file category="sourceC" name="examples/common/demo/printer/fonts/AlibabaPuHuiTi_3_55_Regular_55.c" version="1.0.0" />
+      </files>
+    </component>
+  </components>
+</package>

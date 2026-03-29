@@ -1,0 +1,9 @@
+{
+    "DemoName": "SuperT",
+    "DemoVersion": "1.0.20",
+    "AdaptFrameworks": [
+        "EmbeddedPackage-AI:WuKong"
+    ],
+    "MinVersion": "3.13.3",
+    "MaxVersion": null
+}

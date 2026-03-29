@@ -1,0 +1,242 @@
+menuconfig APP_CONFIG
+    config TUYA_MODULE_T5
+        bool 
+        default n
+
+    config ENABLE_AI_MODE_HOLD
+        bool 
+        default n
+
+    config ENABLE_AI_MODE_ONESHOT
+        bool 
+        default n
+
+    config ENABLE_AI_MODE_WAKEUP
+        bool 
+        default n
+
+    config ENABLE_AI_MODE_FREE
+        bool 
+        default n
+
+    config ENABLE_AI_MODE_TRANSLATE
+        bool 
+        default n
+        
+    config USING_UART_AUDIO_INPUT
+        bool
+        default n
+
+    config USING_BOARD_AUDIO_INPUT
+        bool
+        default n
+
+    config USING_UART_AUDIO_OUTPUT
+        bool
+        default n
+
+    config USING_BOARD_AUDIO_OUTPUT
+        bool
+        default n
+
+    config BOARD_TYPE
+    choice
+    prompt "BOARD_TYPE choice"
+    default T5AI_BOARD
+
+    config T5AI_BOARD
+        bool "T5AI_BOARD"
+        select LCD_SPI_DISPLAY
+        select SPI0_REMAP_PIN
+        select TUYA_MODULE_T5
+        select USING_BOARD_AUDIO_INPUT
+        select USING_BOARD_AUDIO_OUTPUT
+        select ENABLE_AI_MODE_HOLD
+        select ENABLE_AI_MODE_ONESHOT
+        select ENABLE_AI_MODE_WAKEUP
+        select ENABLE_AI_MODE_FREE
+
+
+    config T5AI_BOARD_EYES
+        bool "T5AI_BOARD_EYES"
+        select LCD_SPI_DISPLAY
+        select TUYA_MODULE_T5
+        select USING_BOARD_AUDIO_INPUT
+        select USING_BOARD_AUDIO_OUTPUT
+        select ENABLE_AI_MODE_HOLD
+        select ENABLE_AI_MODE_ONESHOT
+        select ENABLE_AI_MODE_WAKEUP
+        select ENABLE_AI_MODE_FREE
+
+    config T5AI_BOARD_EVB
+        bool "T5AI_BOARD_EVB"
+        select LCD_SPI_DISPLAY
+        select TUYA_MODULE_T5
+        select USING_BOARD_AUDIO_INPUT
+        select USING_BOARD_AUDIO_OUTPUT
+        select ENABLE_AI_MODE_HOLD
+        select ENABLE_AI_MODE_ONESHOT
+        select ENABLE_AI_MODE_WAKEUP
+        select ENABLE_AI_MODE_FREE
+
+    config T5AI_BOARD_ROBOT
+        bool "T5AI_BOARD_ROBOT"
+        select LCD_SPI_DISPLAY
+        select SPI0_REMAP_PIN
+        select TUYA_MODULE_T5
+        select USING_BOARD_AUDIO_INPUT
+        select USING_BOARD_AUDIO_OUTPUT
+        select ENABLE_AI_MODE_HOLD
+        select ENABLE_AI_MODE_ONESHOT
+        select ENABLE_AI_MODE_WAKEUP
+        select ENABLE_AI_MODE_FREE
+
+    config T5AI_BOARD_DESKTOP
+        bool "T5AI_BOARD_DESKTOP"
+        select LCD_SPI_DISPLAY
+        select TUYA_MODULE_T5
+        select USING_BOARD_AUDIO_INPUT
+        select USING_BOARD_AUDIO_OUTPUT
+        select ENABLE_AI_MODE_HOLD
+        select ENABLE_AI_MODE_ONESHOT
+        select ENABLE_AI_MODE_WAKEUP
+        select ENABLE_AI_MODE_FREE
+
+    config WUKONG_BOARD_UBUNTU
+        bool "UBUNTU"
+        select USING_BOARD_AUDIO_INPUT
+        select USING_BOARD_AUDIO_OUTPUT
+        select ENABLE_AI_MODE_HOLD
+
+    endchoice
+
+    if (T5AI_BOARD || T5AI_BOARD_EYES || T5AI_BOARD_ROBOT || T5AI_BOARD_EVB_PRO ||T5AI_BOARD_DESKTOP)
+        menuconfig ENABLE_TUYA_CAMERA
+            bool "ENABLE_TUYA_CAMERA"
+            default n
+
+        if (ENABLE_TUYA_CAMERA)
+            config ENABLE_AI_MODE_P2P
+                bool "ENABLE_AI_MODE_P2P"
+                default n
+        endif
+    endif
+
+    if (T5AI_BOARD_EYES)
+        config LCD_SPI_DEVICE_NUM
+            int "LCD_SPI_DEVICE_NUM"
+            default 1
+    endif
+
+    menuconfig ENABLE_TUYA_UI
+        bool "ENABLE_TUYA_UI"
+        select TUYA_CPU_ARCH_SMP
+        select TUYA_LIB_FREETYPE
+        select TUYA_LIBJPEG_TURBO
+        default n
+
+    if (ENABLE_TUYA_UI)
+        config TUYA_CPU_ARCH_SMP
+            bool "enable cpu smp architecture"
+            select TUYA_MULTI_TYPES_LCD
+            select TUYA_AI_TOY_DEMO
+            select TUYA_LVGL_DRAW_WITH_ARM2D
+            select RGB565_COLOR_SWAP_LVGL
+            select RGB888_COLOR_SWAP_LVGL
+            default n
+
+        config TUYA_MULTI_TYPES_LCD
+            bool
+            default n
+
+        config TUYA_APP_DRIVERS_TP
+            bool
+            default n
+
+        config RGB565_COLOR_SWAP_LVGL
+            bool 
+            default n
+
+        config RGB888_COLOR_SWAP_LVGL
+            bool 
+            default n            
+
+        config TUYA_LVGL_VERSION
+            int "lvgl version"
+            default 8
+            range 8 9
+
+        config TUYA_LINGDONG_GUI
+            bool "enable LingDong-GUI"
+            depends on TUYA_LVGL_VERSION = 8 || TUYA_LVGL_VERSION = 9
+            default n
+
+        config TUYA_IMG_DIRECT_FLUSH
+            bool "enable image directly refreshes to screen"
+            depends on TUYA_CPU_ARCH_SMP
+            default n
+
+        config TUYA_LVGL_DRAW_WITH_ARM2D
+            bool 
+            default n
+
+        config TUYA_FILE_SYSTEM
+            bool "enable file system (littlefs/fatfs)"
+            default n
+
+        config TUYA_LIBJPEG_TURBO
+            bool 
+            default n
+
+        config TUYA_LIB_FREETYPE
+            bool 
+            default n
+        
+        config TUYA_AI_TOY_DEMO
+            bool
+            default n
+
+        config LV_COLOR_16_SWAP
+            bool
+            default n
+            
+        config LCD_SPI_DISPLAY
+            bool
+            default n
+
+        config SPI0_REMAP_PIN
+            bool
+            default n  
+    endif      
+
+    config ENABLE_CELLULAR_DONGLE
+        bool "ENABLE_TUYA_CELLULAR_DONGLE with USB"
+        default n
+
+    config TUYA_AI_CHAT_DEFAULT_MODE
+        int "TUYA_AI_CHAT_DEFAULT_MODE"
+        range 0 5
+        default 0
+        help
+            0 : hold chat mode
+            1 : oneshot chat mode
+            2 : wakeup chat mode
+            3 : free chat mode
+            4 : translate mode
+            5 : p2p mode
+
+    menu "AI player Decoder Options"
+        config AI_PLAYER_DECODER_OPUS_ENABLE
+            bool "AI_PLAYER_DECODER_OPUS_ENABLE: Enable OPUS decoder without any container"
+            default y
+        config AI_PLAYER_DECODER_OPUS_FRAME_SIZE
+            depends on AI_PLAYER_DECODER_OPUS_ENABLE
+            int "AI_PLAYER_DECODER_OPUS_FRAME_SIZE: OPUS decoder frame size in ms"
+            default 40
+            range 10 60
+        config AI_PLAYER_DECODER_OPUS_KBPS
+            depends on AI_PLAYER_DECODER_OPUS_ENABLE
+            int "AI_PLAYER_DECODER_OPUS_KBPS: OPUS decoder kbps, 16kbps or 24kbps is recommended"
+            default 16
+            range 16 128
+    endmenu # AI player Decoder Options
