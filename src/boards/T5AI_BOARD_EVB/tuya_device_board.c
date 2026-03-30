@@ -29,7 +29,7 @@ OPERATE_RET tuya_device_board_init(VOID_T)
 {
     OPERATE_RET rt = OPRT_OK;
 #if defined(TUYA_AI_TOY_BATTERY_ENABLE) && (TUYA_AI_TOY_BATTERY_ENABLE == 1)
-    tuya_ai_toy_charge_level_set(TUYA_GPIO_LEVEL_LOW);
+    tuya_ai_toy_charge_level_set(TUYA_GPIO_LEVEL_HIGH);
 #endif
     return rt;
 }

@@ -41,7 +41,7 @@ OPERATE_RET tuya_device_board_init(VOID_T)
     TAL_PR_NOTICE("ai toy -> init SuperT board");
     __t5ai_board_pinmux_init();
 #if defined(TUYA_AI_TOY_BATTERY_ENABLE) && (TUYA_AI_TOY_BATTERY_ENABLE == 1)
-    tuya_ai_toy_charge_level_set(TUYA_GPIO_LEVEL_LOW);
+    tuya_ai_toy_charge_level_set(TUYA_GPIO_LEVEL_HIGH);
 #endif
     return rt;
 }
