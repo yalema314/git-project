@@ -114,4 +114,10 @@ VOID tuya_ai_toy_idle_timer_ctrl(BOOL_T enable);
  */
 VOID tuya_ai_toy_wakeup_dp_report(BOOL_T enable);
 
+/**
+ * @brief Whether boot-time cloud reporting is ready for non-critical DP uploads.
+ * @return TRUE when the device has finished the boot-time switch report, FALSE otherwise.
+ */
+BOOL_T tuya_ai_toy_boot_report_ready(VOID);
+
 #endif /* __TUYA_AI_TOY_H__ */

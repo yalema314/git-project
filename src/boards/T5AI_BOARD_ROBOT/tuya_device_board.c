@@ -14,6 +14,10 @@
 #include "tuya_robot_actions.h"
 #include "tuya_ai_display.h"
 
+#if defined(TUYA_AI_TOY_BATTERY_ENABLE) && (TUYA_AI_TOY_BATTERY_ENABLE == 1)
+#include "tuya_ai_battery.h"
+#endif
+
 /***********************************************************
 ************************macro define************************
 ***********************************************************/
@@ -85,6 +89,9 @@ OPERATE_RET tuya_device_board_init(VOID_T)
     TAL_PR_NOTICE("ai toy -> init action");
     TUYA_CALL_ERR_LOG(tuya_robot_action_init());
     TUYA_CALL_ERR_LOG(app_gesture_init(ai_robot_gesture_cb));
+#if defined(TUYA_AI_TOY_BATTERY_ENABLE) && (TUYA_AI_TOY_BATTERY_ENABLE == 1)
+    tuya_ai_toy_charge_level_set(TUYA_GPIO_LEVEL_HIGH);
+#endif
 
     return rt;
 }

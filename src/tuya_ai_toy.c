@@ -128,6 +128,11 @@ STATIC VOID __on_ai_toy_wf_nw_stat_cb(GW_WIFI_NW_STAT_E nw_stat);
  * Config and report helpers
  * --------------------------------------------------------------------------- */
 
+BOOL_T tuya_ai_toy_boot_report_ready(VOID)
+{
+    return s_boot_switch_reported;
+}
+
 VOID tuya_ai_toy_wakeup_dp_report(BOOL_T enable)
 {
     TY_OBJ_DP_S dp = {0};

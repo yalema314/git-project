@@ -6,6 +6,7 @@
  */
 
 #include "tuya_ai_battery.h"
+#include "tuya_ai_toy.h"
 #include "tuya_iot_com_api.h"
 #include "tal_log.h"
 #include "tal_system.h"
@@ -55,6 +56,8 @@ STATIC BOOL_T is_stop = TRUE;
 STATIC BOOL_T s_is_battery_low = FALSE;
 // STATIC BOOL_T s_is_charging = FALSE;
 STATIC UINT8_T last_report_capacity = 0;
+STATIC INT_T last_report_charge_status = -1;
+STATIC BOOL_T s_battery_report_baselined = FALSE;
 STATIC TY_BATTERY_CB s_battery_cb = NULL;
 
 STATIC TUYA_GPIO_LEVEL_E charge_check_level = TUYA_GPIO_LEVEL_LOW;
@@ -522,9 +525,9 @@ VOID __tuya_ai_battery_deinit(VOID)
     }
     TAL_PR_DEBUG("voltage convert thread exit");
     if (batt_conf.mode == AI_BATTERY_MODE_ADC) {
-        tkl_adc_deinit(1);
+        tkl_adc_deinit(0);
     } else if (batt_conf.mode == AI_BATTERY_MODE_IIC) {
-        batt_conf.i2c.init();
+        batt_conf.i2c.deinit();
     }
 
     __battery_monitor_timer_stop(sw_timer_id);
@@ -551,52 +554,99 @@ STATIC INT_T __tuya_ai_toy_battery_callback(UINT8_T current_capacity)
 {
     BOOL_T is_charging = __tuya_ai_toy_battery_is_charging();
     BATTERY_CHAEGE_STATUS charge_status = __tuya_ai_toy_charge_status_get(is_charging, current_capacity);
-    TAL_PR_NOTICE("[%s], is_charging: %d", __func__, is_charging);
+    UINT8_T prev_report_capacity = last_report_capacity;
+    INT_T prev_charge_status = last_report_charge_status;
+    BOOL_T boot_ready = tuya_ai_toy_boot_report_ready();
+
+    TAL_PR_NOTICE("[%s], is_charging: %d, boot_ready: %d", __func__, is_charging, boot_ready);
     if (s_battery_cb) {
         s_battery_cb(current_capacity <= 20, is_charging);
     }
+
+    if (!boot_ready) {
+        if (current_capacity != 0xff) {
+            last_report_capacity = current_capacity;
+        }
+        last_report_charge_status = charge_status;
+        s_battery_report_baselined = FALSE;
+        TAL_PR_NOTICE("%s, skip battery report before boot ready, status=%d cap=%d", __func__, charge_status, current_capacity);
+        return 0;
+    }
+
+    if (!s_battery_report_baselined) {
+        if (current_capacity != 0xff) {
+            last_report_capacity = current_capacity;
+        }
+        last_report_charge_status = charge_status;
+        s_battery_report_baselined = TRUE;
+        TAL_PR_NOTICE("%s, battery report baseline armed, status=%d cap=%d", __func__, charge_status, current_capacity);
+        return 0;
+    }
+
     if (!is_charging) {
+        BOOL_T capacity_changed = (current_capacity != 0xff) && (current_capacity != prev_report_capacity);
+        BOOL_T charge_changed = (prev_charge_status != BATTERY_NO_CHARGE);
+
+        if (!capacity_changed && !charge_changed) {
+            return 0;
+        }
+
         TAL_PR_NOTICE("%s, capacity: %d", __func__, current_capacity);
-        // 上报dp
         TY_OBJ_DP_S batt_cap_dp_info[2];
-        batt_cap_dp_info[0].dpid = 2;
-        batt_cap_dp_info[0].type = PROP_VALUE;
-        batt_cap_dp_info[0].value.dp_value = current_capacity;
-        batt_cap_dp_info[0].time_stamp = 0;
+        UINT_T dp_cnt = 0;
 
-        batt_cap_dp_info[1].dpid = 5;
-        batt_cap_dp_info[1].type = PROP_ENUM;
-        batt_cap_dp_info[1].value.dp_enum = BATTERY_NO_CHARGE;
-        batt_cap_dp_info[1].time_stamp = 0;
+        if (capacity_changed) {
+            batt_cap_dp_info[dp_cnt].dpid = 2;
+            batt_cap_dp_info[dp_cnt].type = PROP_VALUE;
+            batt_cap_dp_info[dp_cnt].value.dp_value = current_capacity;
+            batt_cap_dp_info[dp_cnt].time_stamp = 0;
+            dp_cnt++;
+        }
 
-        dev_report_dp_json_async_force(NULL, &batt_cap_dp_info, 2);
+        if (charge_changed) {
+            batt_cap_dp_info[dp_cnt].dpid = 5;
+            batt_cap_dp_info[dp_cnt].type = PROP_ENUM;
+            batt_cap_dp_info[dp_cnt].value.dp_enum = BATTERY_NO_CHARGE;
+            batt_cap_dp_info[dp_cnt].time_stamp = 0;
+            dp_cnt++;
+        }
 
-        last_report_capacity = current_capacity;
+        if (dp_cnt > 0) {
+            dev_report_dp_json_async_force(NULL, batt_cap_dp_info, dp_cnt);
+        }
 
-        // // 低电量亮红灯
-        // if (current_capacity <= 20) {
-        //     tkl_gpio_write(TUYA_AI_TOY_LED, 1);
-        // } else {
-        //     tkl_gpio_write(TUYA_AI_TOY_LED, 0);
-        // }
+        if (current_capacity != 0xff) {
+            last_report_capacity = current_capacity;
+        }
+        last_report_charge_status = BATTERY_NO_CHARGE;
     } else {
+        BOOL_T charge_changed = (charge_status != prev_charge_status);
+
+        if (!charge_changed) {
+            if (current_capacity != 0xff) {
+                last_report_capacity = current_capacity;
+            }
+            return 0;
+        }
+
         TAL_PR_NOTICE("%s, charge status: %d, capacity: %d", __func__, charge_status, current_capacity);
         TY_OBJ_DP_S batt_cap_dp_info;
         batt_cap_dp_info.dpid = 5;
         batt_cap_dp_info.type = PROP_ENUM;
         batt_cap_dp_info.value.dp_enum = charge_status;
         batt_cap_dp_info.time_stamp = 0;
-        // 充电时候关闭低电量灯
-        // __tuya_ai_toy_battery_led_off();
 
         dev_report_dp_json_async_force(NULL, &batt_cap_dp_info, 1);
         if (current_capacity != 0xff) {
             last_report_capacity = current_capacity;
         }
+        last_report_charge_status = charge_status;
     }
+
     return 0;
 }
 
+// 电量变化回调，外部调用，电量低于20%，或者充电状态变化都会回调
 STATIC VOID _battery_cb(BOOL_T is_low, BOOL_T is_charging)
 {
     TAL_PR_DEBUG("battery low = %d, charging = %d", is_low, is_charging);
@@ -627,10 +677,12 @@ OPERATE_RET tuya_ai_toy_battery_init(VOID)
 {
     OPERATE_RET rt = OPRT_OK;
     s_battery_cb = _battery_cb;
+    s_battery_report_baselined = FALSE;
+    last_report_charge_status = -1;
 
     ai_battery_conf_t conf = {
         .mode = AI_BATTERY_MODE_ADC,
-        .adc = {				
+        .adc = {
             .adc_gpio = TUYA_AI_TOY_BATTERY_CAP_PIN,
             .map = bvc_map,
             .map_size = tuya_ai_vol2cap_map_size(),
@@ -641,12 +693,12 @@ OPERATE_RET tuya_ai_toy_battery_init(VOID)
 
     // 充电状态IO
     TUYA_GPIO_BASE_CFG_T cfg;
-    cfg.direct = TUYA_GPIO_INPUT; 
+    cfg.direct = TUYA_GPIO_INPUT;
     cfg.mode = TUYA_GPIO_FLOATING;
     tkl_gpio_init(TUYA_AI_TOY_CHARGE_PIN, &cfg);
 
     // battery monitor init
-    __tuya_ai_battery_init(&conf);
+    TUYA_CALL_ERR_RETURN(__tuya_ai_battery_init(&conf));
 
     return rt;
 }
