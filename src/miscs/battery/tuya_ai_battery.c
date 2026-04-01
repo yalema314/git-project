@@ -41,11 +41,11 @@
 #define BATTERY_CAPACITY_JUMP_GUARD        15
 #define BATTERY_CHARGE_DONE_CAPACITY       100
 
-/* BAT -> 806K -> BAT_ADC -> 2M -> GND, so VBAT = VADC * (806K + 2M) / 2M. */
+/* BAT -> 806K -> GND, so VBAT = VADC * (806K + 2M) / 2M. */
 #define BATTERY_ADC_DIVIDER_UPPER_RES_KOHM 806U
 #define BATTERY_ADC_DIVIDER_LOWER_RES_KOHM 2000U
 #define BATTERY_ADC_DIVIDER_NUMERATOR      (BATTERY_ADC_DIVIDER_UPPER_RES_KOHM + BATTERY_ADC_DIVIDER_LOWER_RES_KOHM)
-#define BATTERY_ADC_DIVIDER_DENOMINATOR    BATTERY_ADC_DIVIDER_LOWER_RES_KOHM
+#define BATTERY_ADC_DIVIDER_DENOMINATOR    BATTERY_ADC_DIVIDER_UPPER_RES_KOHM
 
 
 typedef enum {
@@ -67,6 +67,7 @@ STATIC BOOL_T is_stop = TRUE;
 STATIC BOOL_T s_is_battery_low = FALSE;
 // STATIC BOOL_T s_is_charging = FALSE;
 STATIC UINT8_T last_report_capacity = 0;
+STATIC UINT8_T last_dp2_report_capacity = 0xff;
 STATIC INT_T last_report_charge_status = -1;
 STATIC INT_T s_last_ui_charge_status = -1;
 STATIC BOOL_T s_battery_report_baselined = FALSE;
@@ -101,19 +102,19 @@ STATIC CONST CHAR_T *__battery_charge_status_str(BATTERY_CHAEGE_STATUS status)
     }
 }
 
-// 803035-800-1C电池电压与容量映射表
+// IP5306 + 4.2V 单节锂电电压与容量映射表
 voltage_cap_map bvc_map[] = {
-    {.v = 4200, .c = 100},  // 满电截止电压（充电末端）
-    {.v = 4090, .c =  90},  // 恒流放电末端（对应90%容量）
-    {.v = 3980, .c =  80},  // 放电平台起始点
-    {.v = 3880, .c =  70},  // 主要放电区段
-    {.v = 3780, .c =  60},  // 容量下降转折点
-    {.v = 3680, .c =  50},  // 容量中值基准点
-    {.v = 3570, .c =  40},  // 放电速率加快区
-    {.v = 3440, .c =  30},  // 低电量预警阈值
-    {.v = 3280, .c =  20},  // 深度放电起始
-    {.v = 3100, .c =  10},  // 低压保护触发点
-    {.v = 2800, .c =   0}   // 放电截止电压
+    {.v = 4166, .c = 100},  // 满电实测电压
+    {.v = 4000, .c =  90},  // 高电量区
+    {.v = 3900, .c =  80},  // 放电平台上沿
+    {.v = 3800, .c =  70},  // 常用高电量区
+    {.v = 3700, .c =  60},  // 标称电压附近
+    {.v = 3600, .c =  50},  // 中电量区
+    {.v = 3500, .c =  40},  // 中低电量区
+    {.v = 3400, .c =  30},  // 低电量预警区
+    {.v = 3300, .c =  20},  // 低电量区
+    {.v = 3200, .c =  10},  // 临近关机区
+    {.v = 3000, .c =   0}   // 软件按0%处理，避免贴着硬件保护下限
 };
 
 
@@ -129,8 +130,8 @@ INT_T tuya_ai_vol2cap_map_size(VOID)
 
 STATIC UINT32_T __adc_pin_voltage_to_battery_voltage(UINT32_T adc_pin_voltage)
 {
-    return (adc_pin_voltage * BATTERY_ADC_DIVIDER_NUMERATOR + (BATTERY_ADC_DIVIDER_DENOMINATOR / 2)) /
-           BATTERY_ADC_DIVIDER_DENOMINATOR;
+    return (adc_pin_voltage * BATTERY_ADC_DIVIDER_NUMERATOR) /
+           BATTERY_ADC_DIVIDER_UPPER_RES_KOHM;
 }
 
 STATIC VOID __sort_capacity_samples(UINT8_T *samples, UINT8_T count)
@@ -212,6 +213,7 @@ STATIC UINT8_T __adc_conv_capacity(ai_battery_conf_t *bc)
     if (ret != OPRT_OK) {
         PR_ERR("tkl_adc_read_voltage failed, ret=%d", ret);
         return last_capacity != 0xff ? last_capacity : 0;
+        TAL_PR_NOTICE("adc=%u",ret);
     }
 
     // 1, discard a high/low outlier in the current ADC burst.
@@ -248,6 +250,7 @@ STATIC UINT8_T __adc_conv_capacity(ai_battery_conf_t *bc)
 #endif
 
     capacity = __voltage_conv_cap(cur_vol, bc->adc.map, bc->adc.map_size);
+    TAL_PR_NOTICE("adc avg=%u mV, battery vol=%u mV, capacity=%u", adc_sample, cur_vol, capacity);
     return capacity;
 }
 
@@ -546,7 +549,7 @@ STATIC INT_T __tuya_ai_toy_battery_callback(UINT8_T current_capacity)
 {
     BOOL_T is_charging = __tuya_ai_toy_battery_is_charging();
     BATTERY_CHAEGE_STATUS charge_status = __tuya_ai_toy_charge_status_get(is_charging, current_capacity);
-    UINT8_T prev_report_capacity = last_report_capacity;
+    UINT8_T prev_dp2_report_capacity = last_dp2_report_capacity;
     INT_T prev_charge_status = last_report_charge_status;
     BOOL_T boot_ready = tuya_ai_toy_boot_report_ready();
     OPERATE_RET report_rt = OPRT_OK;
@@ -584,7 +587,7 @@ STATIC INT_T __tuya_ai_toy_battery_callback(UINT8_T current_capacity)
         TY_OBJ_DP_S batt_cap_dp_info[2];
         UINT_T dp_cnt = 0;
 
-        if (current_capacity != 0xff) {
+        if (!is_charging && (current_capacity != 0xff)) {
             batt_cap_dp_info[dp_cnt].dpid = 2;
             batt_cap_dp_info[dp_cnt].type = PROP_VALUE;
             batt_cap_dp_info[dp_cnt].value.dp_value = current_capacity;
@@ -600,7 +603,7 @@ STATIC INT_T __tuya_ai_toy_battery_callback(UINT8_T current_capacity)
 
         TAL_PR_NOTICE("%s, initial battery report sync, status=%s(%d), cap=%u, dp_cnt=%u",
                       __func__, __battery_charge_status_str(charge_status), charge_status, current_capacity, dp_cnt);
-        if (current_capacity != 0xff) {
+        if (!is_charging && (current_capacity != 0xff)) {
             TAL_PR_NOTICE("%s, report dpid2=%u dpid5=%d", __func__, current_capacity, charge_status);
         } else {
             TAL_PR_NOTICE("%s, report dpid5=%d", __func__, charge_status);
@@ -614,6 +617,9 @@ STATIC INT_T __tuya_ai_toy_battery_callback(UINT8_T current_capacity)
 
         if (current_capacity != 0xff) {
             last_report_capacity = current_capacity;
+            if (!is_charging) {
+                last_dp2_report_capacity = current_capacity;
+            }
         }
         last_report_charge_status = charge_status;
         s_battery_report_baselined = TRUE;
@@ -621,7 +627,7 @@ STATIC INT_T __tuya_ai_toy_battery_callback(UINT8_T current_capacity)
     }
 
     if (!is_charging) {
-        BOOL_T capacity_changed = (current_capacity != 0xff) && (current_capacity != prev_report_capacity);
+        BOOL_T capacity_changed = (current_capacity != 0xff) && (current_capacity != prev_dp2_report_capacity);
         BOOL_T charge_changed = (prev_charge_status != BATTERY_NO_CHARGE);
 
         if (!capacity_changed && !charge_changed) {
@@ -666,6 +672,9 @@ STATIC INT_T __tuya_ai_toy_battery_callback(UINT8_T current_capacity)
 
         if (current_capacity != 0xff) {
             last_report_capacity = current_capacity;
+            if (capacity_changed) {
+                last_dp2_report_capacity = current_capacity;
+            }
         }
         last_report_charge_status = BATTERY_NO_CHARGE;
     } else {
@@ -737,6 +746,7 @@ OPERATE_RET tuya_ai_toy_battery_init(VOID)
     OPERATE_RET rt = OPRT_OK;
     s_battery_cb = _battery_cb;
     s_battery_report_baselined = FALSE;
+    last_dp2_report_capacity = 0xff;
     last_report_charge_status = -1;
     s_last_ui_charge_status = -1;
 

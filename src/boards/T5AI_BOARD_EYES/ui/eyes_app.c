@@ -2,46 +2,46 @@
 #include "gui_common.h"
 #include "lvgl.h"
 
-LV_IMG_DECLARE(Neutral);
-LV_IMG_DECLARE(Fearful);
-LV_IMG_DECLARE(Think);
-LV_IMG_DECLARE(Confused);
-LV_IMG_DECLARE(Disappointed);
-LV_IMG_DECLARE(Angry);
-LV_IMG_DECLARE(Happy);
-LV_IMG_DECLARE(Sad);
-LV_IMG_DECLARE(Surprise);
-LV_IMG_DECLARE(Touched);
+LV_IMG_DECLARE(Nature160);
+LV_IMG_DECLARE(Fearful160);
+LV_IMG_DECLARE(Think160);
+LV_IMG_DECLARE(Confused160);
+LV_IMG_DECLARE(Disappointed160);
+LV_IMG_DECLARE(Angry160);
+LV_IMG_DECLARE(Happy160);
+LV_IMG_DECLARE(Sad160);
+LV_IMG_DECLARE(Surprise160);
+LV_IMG_DECLARE(Touch160);
 
 static lv_obj_t *dual_eyes;
 static int current_gif_index = -1;
 
 static const gui_emotion_t gif_emotion[] = {
-    {&Neutral,         "neutral"      },
-    {&Happy,           "loving"       },
-    {&Confused,        "confused"     },
-    {&Happy,           "delicious"    },
-    {&Fearful,         "fearful"      },
-    {&Think,           "thinking"     },
-    {&Disappointed,    "disappointed" },
-    {&Happy,           "happy"        },
-    {&Sad,             "sad"          },
-    {&Surprise,        "surprise"     },
-    {&Angry,           "angry"        },
-    {&Touched,         "touch"        },
+    {&Nature160,         "neutral"      },
+    {&Happy160,          "loving"       },
+    {&Confused160,       "confused"     },
+    {&Happy160,          "delicious"    },
+    {&Fearful160,        "fearful"      },
+    {&Think160,          "thinking"     },
+    {&Disappointed160,   "disappointed" },
+    {&Happy160,          "happy"        },
+    {&Sad160,            "sad"          },
+    {&Surprise160,       "surprise"     },
+    {&Angry160,          "angry"        },
+    {&Touch160,          "touch"        },
     /*----------------------------------- */
     // Single-eye aliases for cloud emotion names. Keep all of them on the
     // 160x160 assets because this board only drives one eye screen.
-    {&Sad,             "crying"       },
-    {&Happy,           "laughing"     },
-    {&Happy,           "winking"      },
-    {&Confused,        "cool"         },
-    {&Confused,        "embarrassed"  },
-    {&Surprise,        "shocked"      },
-    {&Confused,        "silly"        },
-    {&Surprise,        "suprising"    },
-    {&Neutral,         "relaxed"      },
-    {&Happy,           "sleepy"       },
+    {&Sad160,            "crying"       },
+    {&Happy160,          "laughing"     },
+    {&Happy160,          "winking"      },
+    {&Confused160,       "cool"         },
+    {&Confused160,       "embarrassed"  },
+    {&Surprise160,       "shocked"      },
+    {&Confused160,       "silly"        },
+    {&Surprise160,       "suprising"    },
+    {&Nature160,         "relaxed"      },
+    {&Happy160,          "sleepy"       },
 };
 
 #include "tal_log.h"

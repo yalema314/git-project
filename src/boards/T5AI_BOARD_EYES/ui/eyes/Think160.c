@@ -21,7 +21,7 @@
 #define LV_ATTRIBUTE_IMG_THINK
 #endif
 
-const LV_ATTRIBUTE_MEM_ALIGN LV_ATTRIBUTE_LARGE_CONST LV_ATTRIBUTE_IMG_THINK uint8_t Think_map[] = {
+const LV_ATTRIBUTE_MEM_ALIGN LV_ATTRIBUTE_LARGE_CONST LV_ATTRIBUTE_IMG_THINK uint8_t Think160_map[] = {
     0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0xa0, 0x00, 0xa0, 0x00, 0xf7, 0x00, 0x00, 
     0xff, 0xff, 0xff, 0xff, 0xd6, 0x8c, 0xff, 0xff, 0xf7, 0xff, 0xce, 0x84, 0xf7, 
     0xf7, 0xf7, 0xff, 0xce, 0x8c, 0xf7, 0xce, 0x84, 0xff, 0xde, 0xad, 0xff, 0xde, 
@@ -7403,12 +7403,12 @@ const LV_ATTRIBUTE_MEM_ALIGN LV_ATTRIBUTE_LARGE_CONST LV_ATTRIBUTE_IMG_THINK uin
     0x8c, 0x9d, 0x96, 0x80, 0x00, 0x00, 0x3b
 };
 
-const lv_img_dsc_t Think = {
+const lv_img_dsc_t Think160 = {
 //   .header.cf = LV_IMG_CF_RAW_CHROMA_KEYED,
 //   .header.always_zero = 0,
 //   .header.reserved = 0,
   .header.w = 160,
   .header.h = 160,
   .data_size = 95921,
-  .data = Think_map,
+  .data = Think160_map,
 };

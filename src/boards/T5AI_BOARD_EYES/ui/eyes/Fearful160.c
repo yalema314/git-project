@@ -21,7 +21,7 @@
 #define LV_ATTRIBUTE_IMG_FEARFUL
 #endif
 
-const LV_ATTRIBUTE_MEM_ALIGN LV_ATTRIBUTE_LARGE_CONST LV_ATTRIBUTE_IMG_FEARFUL uint8_t Fearful_map[] = {
+const LV_ATTRIBUTE_MEM_ALIGN LV_ATTRIBUTE_LARGE_CONST LV_ATTRIBUTE_IMG_FEARFUL uint8_t Fearful160_map[] = {
     0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0xa0, 0x00, 0xa0, 0x00, 0xf7, 0x16, 0x00, 
     0xff, 0xd6, 0x8c, 0xff, 0xc5, 0x6b, 0xff, 0xce, 0x84, 0xff, 0xc5, 0x73, 0xff, 
     0xce, 0x7b, 0xff, 0xce, 0x8c, 0xf7, 0xce, 0x84, 0xef, 0xbd, 0x7b, 0xff, 0xc5, 
@@ -5990,12 +5990,12 @@ const LV_ATTRIBUTE_MEM_ALIGN LV_ATTRIBUTE_LARGE_CONST LV_ATTRIBUTE_IMG_FEARFUL u
     0x00, 0x00, 0x3b
 };
 
-const lv_img_dsc_t Fearful = {
+const lv_img_dsc_t Fearful160 = {
 //   .header.cf = LV_IMG_CF_RAW_CHROMA_KEYED,
 //   .header.always_zero = 0,
 //   .header.reserved = 0,
   .header.w = 160,
   .header.h = 160,
   .data_size = 77548,
-  .data = Fearful_map,
+  .data = Fearful160_map,
 };

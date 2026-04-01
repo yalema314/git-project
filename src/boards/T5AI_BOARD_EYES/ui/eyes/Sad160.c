@@ -21,7 +21,7 @@
 #define LV_ATTRIBUTE_IMG_SAD
 #endif
 
-const LV_ATTRIBUTE_MEM_ALIGN LV_ATTRIBUTE_LARGE_CONST LV_ATTRIBUTE_IMG_SAD uint8_t Sad_map[] = {
+const LV_ATTRIBUTE_MEM_ALIGN LV_ATTRIBUTE_LARGE_CONST LV_ATTRIBUTE_IMG_SAD uint8_t Sad160_map[] = {
     0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0xa0, 0x00, 0xa0, 0x00, 0xf7, 0x00, 0x00, 
     0xff, 0xff, 0xff, 0x19, 0x19, 0x10, 0x84, 0x63, 0x42, 0xff, 0xff, 0xf7, 0x21, 
     0x21, 0x19, 0x21, 0x19, 0x19, 0xf7, 0xf7, 0xf7, 0x21, 0x19, 0x10, 0x7b, 0x63, 
@@ -8607,12 +8607,12 @@ const LV_ATTRIBUTE_MEM_ALIGN LV_ATTRIBUTE_LARGE_CONST LV_ATTRIBUTE_IMG_SAD uint8
     0x3b
 };
 
-const lv_img_dsc_t Sad = {
+const lv_img_dsc_t Sad160 = {
 //   .header.cf = LV_IMG_CF_RAW_CHROMA_KEYED,
 //   .header.always_zero = 0,
 //   .header.reserved = 0,
   .header.w = 160,
   .header.h = 160,
   .data_size = 111567,
-  .data = Sad_map,
+  .data = Sad160_map,
 };

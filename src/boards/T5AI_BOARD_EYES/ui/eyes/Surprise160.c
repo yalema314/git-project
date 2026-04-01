@@ -21,7 +21,7 @@
 #define LV_ATTRIBUTE_IMG_SURPRISE
 #endif
 
-const LV_ATTRIBUTE_MEM_ALIGN LV_ATTRIBUTE_LARGE_CONST LV_ATTRIBUTE_IMG_SURPRISE uint8_t Surprise_map[] = {
+const LV_ATTRIBUTE_MEM_ALIGN LV_ATTRIBUTE_LARGE_CONST LV_ATTRIBUTE_IMG_SURPRISE uint8_t Surprise160_map[] = {
     0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0xa0, 0x00, 0xa0, 0x00, 0xf7, 0x07, 0x00, 
     0xff, 0xd6, 0x8c, 0xff, 0xff, 0xf7, 0xff, 0xce, 0x84, 0xef, 0xd6, 0x6b, 0xff, 
     0xce, 0x8c, 0xff, 0xf7, 0xf7, 0xff, 0xc5, 0x6b, 0xff, 0xff, 0xff, 0xf7, 0xc5, 
@@ -8638,12 +8638,12 @@ const LV_ATTRIBUTE_MEM_ALIGN LV_ATTRIBUTE_LARGE_CONST LV_ATTRIBUTE_IMG_SURPRISE 
     0x09, 0x08, 0x00, 0x3b
 };
 
-const lv_img_dsc_t Surprise = {
+const lv_img_dsc_t Surprise160 = {
 //   .header.cf = LV_IMG_CF_RAW_CHROMA_KEYED,
 //   .header.always_zero = 0,
 //   .header.reserved = 0,
   .header.w = 160,
   .header.h = 160,
   .data_size = 111973,
-  .data = Surprise_map,
+  .data = Surprise160_map,
 };

@@ -21,7 +21,7 @@
 #define LV_ATTRIBUTE_IMG_ANGRY
 #endif
 
-const LV_ATTRIBUTE_MEM_ALIGN LV_ATTRIBUTE_LARGE_CONST LV_ATTRIBUTE_IMG_ANGRY uint8_t Angry_map[] = {
+const LV_ATTRIBUTE_MEM_ALIGN LV_ATTRIBUTE_LARGE_CONST LV_ATTRIBUTE_IMG_ANGRY uint8_t Angry160_map[] = {
     0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0xa0, 0x00, 0xa0, 0x00, 0xf7, 0x00, 0x00, 
     0xff, 0xff, 0xff, 0xff, 0xce, 0x73, 0x19, 0x19, 0x10, 0x84, 0x63, 0x42, 0xf7, 
     0xb5, 0x52, 0xff, 0xce, 0x7b, 0xff, 0xc5, 0x6b, 0xff, 0xbd, 0x5a, 0xff, 0xff, 
@@ -6858,12 +6858,12 @@ const LV_ATTRIBUTE_MEM_ALIGN LV_ATTRIBUTE_LARGE_CONST LV_ATTRIBUTE_IMG_ANGRY uin
     0x18, 0x46, 0x90, 0x7d, 0x01, 0x01, 0x00, 0x3b
 };
 
-const lv_img_dsc_t Angry = {
+const lv_img_dsc_t Angry160 = {
 //   .header.cf = LV_IMG_CF_RAW_CHROMA_KEYED,
 //   .header.always_zero = 0,
 //   .header.reserved = 0,
   .header.w = 160,
   .header.h = 160,
   .data_size = 88837,
-  .data = Angry_map,
+  .data = Angry160_map,
 };

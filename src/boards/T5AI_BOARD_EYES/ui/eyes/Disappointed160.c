@@ -21,7 +21,7 @@
 #define LV_ATTRIBUTE_IMG_DISAPPOINTED
 #endif
 
-const LV_ATTRIBUTE_MEM_ALIGN LV_ATTRIBUTE_LARGE_CONST LV_ATTRIBUTE_IMG_DISAPPOINTED uint8_t Disappointed_map[] = {
+const LV_ATTRIBUTE_MEM_ALIGN LV_ATTRIBUTE_LARGE_CONST LV_ATTRIBUTE_IMG_DISAPPOINTED uint8_t Disappointed160_map[] = {
     0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0xa0, 0x00, 0xa0, 0x00, 0xf7, 0x2a, 0x00, 
     0xff, 0xd6, 0x8c, 0x19, 0x19, 0x10, 0x84, 0x63, 0x42, 0xff, 0xff, 0xf7, 0xff, 
     0xd6, 0x94, 0xff, 0xce, 0x84, 0xff, 0xe6, 0xbd, 0xff, 0xde, 0xad, 0x29, 0x21, 
@@ -6368,12 +6368,12 @@ const LV_ATTRIBUTE_MEM_ALIGN LV_ATTRIBUTE_LARGE_CONST LV_ATTRIBUTE_IMG_DISAPPOIN
     0x91, 0x58, 0x9f, 0x51, 0x60, 0xb1, 0x8c, 0x19, 0x1c, 0x10, 0x00, 0x3b
 };
 
-const lv_img_dsc_t Disappointed = {
+const lv_img_dsc_t Disappointed160 = {
 //   .header.cf = LV_IMG_CF_RAW_CHROMA_KEYED,
 //   .header.always_zero = 0,
 //   .header.reserved = 0,
   .header.w = 160,
   .header.h = 160,
   .data_size = 82471,
-  .data = Disappointed_map,
+  .data = Disappointed160_map,
 };

@@ -21,7 +21,7 @@
 #define LV_ATTRIBUTE_IMG_TOUCHED
 #endif
 
-const LV_ATTRIBUTE_MEM_ALIGN LV_ATTRIBUTE_LARGE_CONST LV_ATTRIBUTE_IMG_TOUCHED uint8_t Touched_map[] = {
+const LV_ATTRIBUTE_MEM_ALIGN LV_ATTRIBUTE_LARGE_CONST LV_ATTRIBUTE_IMG_TOUCHED uint8_t Touch160_map[] = {
     0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0xa0, 0x00, 0xa0, 0x00, 0xf7, 0x00, 0x00, 
     0xff, 0xff, 0xff, 0xff, 0xd6, 0x8c, 0x19, 0x19, 0x10, 0x84, 0x63, 0x42, 0xf7, 
     0xb5, 0x52, 0xff, 0xce, 0x84, 0xff, 0xce, 0x7b, 0xff, 0xd6, 0x94, 0xff, 0xbd, 
@@ -6094,12 +6094,12 @@ const LV_ATTRIBUTE_MEM_ALIGN LV_ATTRIBUTE_LARGE_CONST LV_ATTRIBUTE_IMG_TOUCHED u
     0x00, 0x3b
 };
 
-const lv_img_dsc_t Touched = {
+const lv_img_dsc_t Touch160 = {
 //   .header.cf = LV_IMG_CF_RAW_CHROMA_KEYED,
 //   .header.always_zero = 0,
 //   .header.reserved = 0,
   .header.w = 160,
   .header.h = 160,
   .data_size = 78899,
-  .data = Touched_map,
+  .data = Touch160_map,
 };
