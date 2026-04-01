@@ -28,12 +28,24 @@
 
 #if defined(TUYA_AI_TOY_BATTERY_ENABLE) || TUYA_AI_TOY_BATTERY_ENABLE == 1
 
-#define ADC_CONV_TIMES  8
-#define ADC_TASK_DELAY_TIME  (60 * 1000)
-#define CAPACITY_KEEP_MAX_TIME  (3 * 60 * 1000)
-#define CAPACITY_CONFIDENCE_INTERVAL        12
-#define CAPACITY_CONFIDENCE_INTERVAL_DELAY  5
-#define BATTERY_CHARGE_DONE_CAPACITY        100
+#define ADC_CONV_TIMES                     8
+#define BATTERY_REPORT_PERIOD_MS           (1 * 1000)
+#define BATTERY_ADC_IDLE_DELAY_MS          (15 * 1000)
+#define BATTERY_ADC_CHARGING_DELAY_MS      (5 * 1000)
+#define BATTERY_ADC_WARMUP_TIMES           15
+#define BATTERY_ADC_WARMUP_DELAY_MS        20
+#define CAPACITY_CONFIDENCE_INTERVAL       12
+#define CAPACITY_CONFIDENCE_INTERVAL_DELAY 5
+#define CAPACITY_CONFIDENCE_TRIM_CNT       2
+#define CAPACITY_STABLE_DIFF               4
+#define BATTERY_CAPACITY_JUMP_GUARD        15
+#define BATTERY_CHARGE_DONE_CAPACITY       100
+
+/* BAT -> 806K -> BAT_ADC -> 2M -> GND, so VBAT = VADC * (806K + 2M) / 2M. */
+#define BATTERY_ADC_DIVIDER_UPPER_RES_KOHM 806U
+#define BATTERY_ADC_DIVIDER_LOWER_RES_KOHM 2000U
+#define BATTERY_ADC_DIVIDER_NUMERATOR      (BATTERY_ADC_DIVIDER_UPPER_RES_KOHM + BATTERY_ADC_DIVIDER_LOWER_RES_KOHM)
+#define BATTERY_ADC_DIVIDER_DENOMINATOR    BATTERY_ADC_DIVIDER_LOWER_RES_KOHM
 
 
 typedef enum {
@@ -50,13 +62,13 @@ STATIC INT32_T adc_chan = 4;
 STATIC UINT8_T last_capacity = 0xff;
 STATIC TIMER_ID sw_timer_id = NULL;
 STATIC THREAD_HANDLE __vol_conv_thread_handle = NULL;
-STATIC UINT8_T *battery_capacity = NULL;
 STATIC BOOL_T is_running = FALSE;
 STATIC BOOL_T is_stop = TRUE;
 STATIC BOOL_T s_is_battery_low = FALSE;
 // STATIC BOOL_T s_is_charging = FALSE;
 STATIC UINT8_T last_report_capacity = 0;
 STATIC INT_T last_report_charge_status = -1;
+STATIC INT_T s_last_ui_charge_status = -1;
 STATIC BOOL_T s_battery_report_baselined = FALSE;
 STATIC TY_BATTERY_CB s_battery_cb = NULL;
 
@@ -115,41 +127,29 @@ INT_T tuya_ai_vol2cap_map_size(VOID)
     return sizeof(bvc_map) / sizeof(bvc_map[0]);
 }
 
-/**
- * @brief 
- * 
- * @param arr 
- * @param n 
- * @return INT_T 
- */
-STATIC INT_T findCandidate(UINT8_T arr[], INT_T n)
+STATIC UINT32_T __adc_pin_voltage_to_battery_voltage(UINT32_T adc_pin_voltage)
 {
-    INT_T count = 0;
-    INT_T candidate = -1;
-
-    for (INT_T i = 0; i < n; i++) {
-        if (count == 0) {
-            candidate = arr[i];
-            count = 1;
-        } else if (arr[i] == candidate) {
-            count++;
-        } else {
-            count--;
-        }
-    }
-
-    return candidate;
+    return (adc_pin_voltage * BATTERY_ADC_DIVIDER_NUMERATOR + (BATTERY_ADC_DIVIDER_DENOMINATOR / 2)) /
+           BATTERY_ADC_DIVIDER_DENOMINATOR;
 }
 
-STATIC INT_T isValidCandidate(UINT8_T arr[], INT_T n, UINT8_T candidate)
+STATIC VOID __sort_capacity_samples(UINT8_T *samples, UINT8_T count)
 {
-    INT_T count = 0;
-    for (INT_T i = 0; i < n; i++) {
-        if (arr[i] == candidate) {
-            count++;
+    INT_T i;
+    INT_T j;
+
+    for (i = 1; i < count; i++) {
+        UINT8_T value = samples[i];
+        for (j = i - 1; j >= 0 && samples[j] > value; j--) {
+            samples[j + 1] = samples[j];
         }
+        samples[j + 1] = value;
     }
-    return count >= (n * 2 / 3);
+}
+
+STATIC UINT8_T __capacity_abs_diff(UINT8_T lhs, UINT8_T rhs)
+{
+    return (lhs >= rhs) ? (lhs - rhs) : (rhs - lhs);
 }
 
 /**
@@ -161,82 +161,94 @@ STATIC INT_T isValidCandidate(UINT8_T arr[], INT_T n, UINT8_T candidate)
  */
 UINT8_T __voltage_conv_cap(INT_T voltage, voltage_cap_map *map, UINT8_T size)
 {
-    // lookup map
-    for (INT_T i = 0; i < size; i++) {
-        if (voltage > map[i].v) {
-            return map[i].c;
+    if ((map == NULL) || (size == 0)) {
+        return 0;
+    }
+
+    if (voltage >= map[0].v) {
+        return map[0].c;
+    }
+
+    if (voltage <= map[size - 1].v) {
+        return map[size - 1].c;
+    }
+
+    for (INT_T i = 1; i < size; i++) {
+        if (voltage >= map[i].v) {
+            UINT32_T high_v = map[i - 1].v;
+            UINT32_T low_v = map[i].v;
+            UINT32_T high_c = map[i - 1].c;
+            UINT32_T low_c = map[i].c;
+            UINT32_T delta_v = high_v - low_v;
+            UINT32_T delta_c = high_c - low_c;
+            UINT32_T offset_v = voltage - low_v;
+
+            if (delta_v == 0) {
+                return low_c;
+            }
+
+            return low_c + (offset_v * delta_c + (delta_v / 2)) / delta_v;
         }
     }
-    return 0;
+
+    return map[size - 1].c;
 }
 
 STATIC UINT8_T __adc_conv_capacity(ai_battery_conf_t *bc)
 {
-    INT_T i, sum = 0, max = 0;
+    OPERATE_RET ret = OPRT_OK;
+    INT_T i;
+    INT_T sum = 0;
+    INT_T max = 0;
+    INT_T min = 0;
     UINT32_T cur_vol = 0, adc_sample = 0;
     INT32_T buf[ADC_CONV_TIMES];
     UINT8_T capacity = 0;
-    STATIC UINT32_T last_adc_sample = 0xffffffff;
 
     sum = 0;
     memset(buf, 0, sizeof(INT32_T) * ADC_CONV_TIMES);
 
-#if defined(T5AI_BOARD_DESKTOP) || defined(T5AI_BOARD_DESKTOP)
-
-    tkl_adc_read_voltage(0, buf, ADC_CONV_TIMES);
-    for (i = 0; i < ADC_CONV_TIMES; i++) {
-        sum += buf[i];
-    }
-    adc_sample = sum/ADC_CONV_TIMES;
-    cur_vol = adc_sample * 4;
-    capacity = __voltage_conv_cap(cur_vol, bc->adc.map, bc->adc.map_size);
-    return capacity;
-
-#else
-
-    // 1, read adc, get voltage (mV)
-    OPERATE_RET ret = tkl_adc_read_voltage(0, buf, ADC_CONV_TIMES);
+    ret = tkl_adc_read_voltage(0, buf, ADC_CONV_TIMES);
     if (ret != OPRT_OK) {
         PR_ERR("tkl_adc_read_voltage failed, ret=%d", ret);
         return last_capacity != 0xff ? last_capacity : 0;
     }
 
-    // 2, get max voltage and sum
+    // 1, discard a high/low outlier in the current ADC burst.
     for (i = 0; i < ADC_CONV_TIMES; i++) {
         sum += buf[i];
 
-        if (max < buf[i])
+        if (i == 0 || max < buf[i]) {
             max = buf[i];
+        }
+
+        if (i == 0 || min > buf[i]) {
+            min = buf[i];
+        }
 
         PR_TRACE("adc[%d]=%d mV", i, buf[i]);
     }
-    PR_TRACE("adc stats: sum=%d, max=%d, count=%d", sum, max, ADC_CONV_TIMES);
+    PR_TRACE("adc stats: sum=%d, max=%d, min=%d, count=%d", sum, max, min, ADC_CONV_TIMES);
 
-    // 3, 丢弃最大值，使用上次采样值
-    if (last_adc_sample != 0xffffffff) {
+    if (ADC_CONV_TIMES > 2) {
         sum -= max;
-        sum += last_adc_sample;
+        sum -= min;
+        adc_sample = sum / (ADC_CONV_TIMES - 2);
+    } else {
+        adc_sample = sum / ADC_CONV_TIMES;
     }
-
-    adc_sample = sum/ADC_CONV_TIMES;
     PR_TRACE("adc avg: %u mV", adc_sample);
 
-    // 4, 3M / 1M 电阻串联分压
-    cur_vol = adc_sample * 4;
+    // 2, restore VBAT by the actual divider in the schematic: 806K / 2M.
+    cur_vol = __adc_pin_voltage_to_battery_voltage(adc_sample);
     PR_TRACE("battery vol (after divider): %u mV", cur_vol);
 
 #if defined(ENABLE_CELLULAR_DONGLE) && (ENABLE_CELLULAR_DONGLE == 1)
     tal_cellular_get_volt(&cur_vol);
-    adc_sample = cur_vol;
 #endif
 
-    // convert to capacity
     capacity = __voltage_conv_cap(cur_vol, bc->adc.map, bc->adc.map_size);
-    // PR_DEBUG("battery sample: %u, cur: %u, vol: %u, cap: %u", last_adc_sample, adc_sample, cur_vol, capacity);
-    last_adc_sample = adc_sample;
-
     return capacity;
-#endif
 }
 
 /**
@@ -248,7 +260,6 @@ STATIC UINT8_T __adc_conv_capacity(ai_battery_conf_t *bc)
  */
 STATIC VOID_T __timer_cb(TIMER_ID timer_id, VOID_T *arg)
 {
-    PR_NOTICE("--- aaa tal sw timer callback");
     ai_battery_conf_t *bc = (ai_battery_conf_t *)arg;
     if (bc->cb != NULL) {
         bc->cb(last_capacity);
@@ -265,44 +276,78 @@ STATIC VOID __battery_monitor_timer_stop(TIMER_ID timer_id)
 STATIC UINT8_T __adc_confidence(ai_battery_conf_t *bc, UINT8_T *out)
 {
     INT_T i;
-    UINT8_T max_capacity = 0;
     UINT8_T capacity[CAPACITY_CONFIDENCE_INTERVAL];
+    UINT32_T sum = 0;
+    UINT8_T start = 0;
+    UINT8_T end = CAPACITY_CONFIDENCE_INTERVAL;
 
     for (i = 0; i < CAPACITY_CONFIDENCE_INTERVAL; i++) {
         capacity[i] = __adc_conv_capacity(bc);
-
-        if (capacity[i] > max_capacity)
-            max_capacity = capacity[i];
-
         tal_system_sleep(CAPACITY_CONFIDENCE_INTERVAL_DELAY);
     }
 
-    // 如果至少2/3采样值相同，则为可信数据, 否则取最大值
-    UINT8_T cap = findCandidate(capacity, CAPACITY_CONFIDENCE_INTERVAL);
-    if (isValidCandidate(capacity, CAPACITY_CONFIDENCE_INTERVAL, cap)) {
-        *out = cap;
-        // PR_DEBUG("ValidCandidate: %u\r\n", cap);
-        return 1;
-    } else {
-        *out = max_capacity;
-        return 0;
+    __sort_capacity_samples(capacity, CAPACITY_CONFIDENCE_INTERVAL);
+
+    if ((CAPACITY_CONFIDENCE_INTERVAL > (CAPACITY_CONFIDENCE_TRIM_CNT * 2)) && (CAPACITY_CONFIDENCE_TRIM_CNT > 0)) {
+        start = CAPACITY_CONFIDENCE_TRIM_CNT;
+        end = CAPACITY_CONFIDENCE_INTERVAL - CAPACITY_CONFIDENCE_TRIM_CNT;
     }
 
+    for (i = start; i < end; i++) {
+        sum += capacity[i];
+    }
+
+    *out = sum / (end - start);
+
+    return __capacity_abs_diff(capacity[CAPACITY_CONFIDENCE_INTERVAL - 1], capacity[0]) <= CAPACITY_STABLE_DIFF;
+}
+
+STATIC BOOL_T __battery_capacity_apply(UINT8_T sample_capacity, BOOL_T is_charging)
+{
+    UINT8_T prev_capacity = last_capacity;
+
+    if (sample_capacity == 0xff) {
+        return FALSE;
+    }
+
+    if (last_capacity == 0xff) {
+        last_capacity = sample_capacity;
+        return TRUE;
+    }
+
+    if (is_charging) {
+        if ((sample_capacity > last_capacity) || (sample_capacity >= BATTERY_CHARGE_DONE_CAPACITY)) {
+            last_capacity = sample_capacity;
+        }
+    } else {
+        if (sample_capacity > last_capacity) {
+            PR_TRACE("ignore battery rise without charging: %u -> %u", last_capacity, sample_capacity);
+            return FALSE;
+        }
+
+        if (__capacity_abs_diff(last_capacity, sample_capacity) >= BATTERY_CAPACITY_JUMP_GUARD) {
+            TAL_PR_NOTICE("ignore abnormal battery drop: %u -> %u", last_capacity, sample_capacity);
+            return FALSE;
+        }
+
+        last_capacity = sample_capacity;
+    }
+
+    return last_capacity != prev_capacity;
 }
 
 STATIC VOID __voltage_convert_task(VOID* arg)
 {
-    INT_T ret;
+    BOOL_T is_charging = FALSE;
     ai_battery_conf_t *bc = (ai_battery_conf_t *)arg;
-    UINT8_T capacity = 0, cap = 0xff;
-    UINT32_T sample_cnt = 0;
-    UINT32_T t = CAPACITY_CONFIDENCE_INTERVAL * CAPACITY_CONFIDENCE_INTERVAL_DELAY + ADC_TASK_DELAY_TIME;
+    UINT8_T capacity = 0;
+    BOOL_T capacity_changed = FALSE;
 
     // 前几次采样不准
     INT_T i = 0;
-    for (i = 0; i < 15; i++) {
+    for (i = 0; i < BATTERY_ADC_WARMUP_TIMES; i++) {
         capacity = __adc_conv_capacity(bc);
-        tal_system_sleep(20);
+        tal_system_sleep(BATTERY_ADC_WARMUP_DELAY_MS);
     }
 
     // 首次上电，使用当前采样值作为初始电量
@@ -317,81 +362,25 @@ STATIC VOID __voltage_convert_task(VOID* arg)
 
     is_running = TRUE;
     is_stop = FALSE;
-
-    BOOL_T  is_charging  = FALSE;
+    is_charging = bc->is_charging_cb && (bc->is_charging_cb() == TRUE);
 
     while (is_running) {
-        // 充电时候，电量值设置0xff，结束充电后，根据实际电压赋值
-        if (bc->is_charging_cb && bc->is_charging_cb() == TRUE) {
-            if (!is_charging) {
-                is_charging = TRUE;
-                #ifdef ENABLE_TUYA_UI
-                tuya_ai_display_msg(NULL, 0, TY_DISPLAY_TP_STAT_CHARGING);
-                #endif
-            }
+        BOOL_T charging_now = bc->is_charging_cb && (bc->is_charging_cb() == TRUE);
 
-            if (bc->mode == AI_BATTERY_MODE_ADC) {
-                ret = __adc_confidence(bc, &capacity);
-                if (ret || capacity >= BATTERY_CHARGE_DONE_CAPACITY) {
-                    last_capacity = capacity;
-                } else if (last_capacity == 0xff) {
-                    last_capacity = capacity;
-                }
-            } else {
-                last_capacity = 0xff;
-            }
-
-            tal_system_sleep(ADC_TASK_DELAY_TIME);
-            continue;
-        } else {
-            if (is_charging) {
-                is_charging = FALSE;
-                #ifdef ENABLE_TUYA_UI                   
-                tuya_ai_display_msg(&last_capacity, 1, TY_DISPLAY_TP_STAT_BATTERY);
-                #endif
-            }
+        if (charging_now != is_charging) {
+            is_charging = charging_now;
+            tuya_ai_battery_force_upload();
         }
 
         if (bc->mode == AI_BATTERY_MODE_ADC) {
-            ret = __adc_confidence(bc, &capacity);
-            if (last_capacity == 0xff) {
-                last_capacity = capacity;
-                battery_capacity[sample_cnt++] = capacity;
-                PR_NOTICE("battery cap init: %u", capacity);
-            } else if (ret) {
-                // 可信数据
-                battery_capacity[sample_cnt++] = capacity;
-            }
-
-            if (sample_cnt == CAPACITY_KEEP_MAX_TIME/t) {
-                // 时间段内，采样次数有2/3 都相同，则认为值暂时有效，进行下一步判断
-                cap = findCandidate(battery_capacity, sample_cnt);
-                INT_T is_valid = isValidCandidate(battery_capacity, sample_cnt, cap);
-                sample_cnt = 0;
-                if (is_valid) {
-                    // 如果采样值较当前值大，使用当前值，容量只降不升
-                    if (last_capacity < cap) {
-                        PR_NOTICE("last_capacity < cap, %d %d", last_capacity, cap);
-                        continue;
-                    }
-                    // 上一个判断可知，当前值大于采样值
-                    // 差值大于等于20,则使用旧值
-                    INT_T diff = last_capacity - cap;
-                    if (diff >= 20) {
-                        PR_NOTICE("diff >= 20, %d %d", last_capacity, cap);
-                        continue;
-                    }
-
-                    // 采样值较当前值小，差值小于10, 更新容量
-                    // 不相等再打印
-                    if( cap != last_capacity) {
-                        last_capacity = cap;
-                        #ifdef ENABLE_TUYA_UI   
-                        tuya_ai_display_msg(&last_capacity, 1, TY_DISPLAY_TP_STAT_BATTERY);
-                        #endif
-                    }
-
-                    PR_NOTICE("battery cap update: %u", last_capacity);
+            __adc_confidence(bc, &capacity);
+            capacity_changed = __battery_capacity_apply(capacity, is_charging);
+            if (capacity_changed) {
+                PR_NOTICE("battery cap update: %u, charging=%d", last_capacity, is_charging);
+                if (!is_charging) {
+#ifdef ENABLE_TUYA_UI
+                    tuya_ai_display_msg(&last_capacity, 1, TY_DISPLAY_TP_STAT_BATTERY);
+#endif
                 }
             }
         } else if (bc->mode == AI_BATTERY_MODE_IIC) {
@@ -401,7 +390,7 @@ STATIC VOID __voltage_convert_task(VOID* arg)
             PR_ERR("%s, mode not support", __func__);
         }
 
-        tal_system_sleep(ADC_TASK_DELAY_TIME);
+        tal_system_sleep(is_charging ? BATTERY_ADC_CHARGING_DELAY_MS : BATTERY_ADC_IDLE_DELAY_MS);
     }
 
     is_stop = TRUE;
@@ -410,7 +399,9 @@ STATIC VOID __voltage_convert_task(VOID* arg)
 
 VOID tuya_ai_battery_force_upload(VOID)
 {
-    tal_sw_timer_trigger(sw_timer_id);
+    if (sw_timer_id != NULL) {
+        tal_sw_timer_trigger(sw_timer_id);
+    }
 }
 
 UINT8_T tuya_ai_battery_get_capacity(VOID)
@@ -491,19 +482,11 @@ INT_T __tuya_ai_battery_init(ai_battery_conf_t *conf)
 
     memcpy(&batt_conf, conf, sizeof(ai_battery_conf_t));
 
-    UINT32_T t = CAPACITY_CONFIDENCE_INTERVAL * CAPACITY_CONFIDENCE_INTERVAL_DELAY + ADC_TASK_DELAY_TIME;
-    battery_capacity = (UINT8_T *)tal_psram_malloc(CAPACITY_KEEP_MAX_TIME/t);
-    if (battery_capacity == NULL) {
-        PR_ERR("%s, psram malloc failed", __func__);
-        goto __EXIT;
-    }
-    memset(battery_capacity, 0, CAPACITY_KEEP_MAX_TIME/t);
-
     // create monitor timer
     TUYA_CALL_ERR_GOTO(tal_sw_timer_create(__timer_cb, &batt_conf, &sw_timer_id), __EXIT);
 
     PR_DEBUG("battery monitor timer start");
-    TUYA_CALL_ERR_LOG(tal_sw_timer_start(sw_timer_id, 60 * 1000, TAL_TIMER_CYCLE));
+    TUYA_CALL_ERR_LOG(tal_sw_timer_start(sw_timer_id, BATTERY_REPORT_PERIOD_MS, TAL_TIMER_CYCLE));
     ty_subscribe_event(EVENT_POST_ACTIVATE, "ai_toy", _event_active_cb, SUBSCRIBE_TYPE_ONETIME);
 
     THREAD_CFG_T thread_cfg = {
@@ -546,11 +529,6 @@ VOID __tuya_ai_battery_deinit(VOID)
 
     __battery_monitor_timer_stop(sw_timer_id);
     sw_timer_id = NULL;
-
-    if (battery_capacity != NULL) {
-        tal_psram_free(battery_capacity);
-        battery_capacity = NULL;
-    }
     return;
 }
 
@@ -558,7 +536,7 @@ BOOL_T __tuya_ai_toy_battery_is_charging(VOID)
 {
     TUYA_GPIO_LEVEL_E level = TUYA_GPIO_LEVEL_NONE;
     tkl_gpio_read(TUYA_AI_TOY_CHARGE_PIN, &level);
-    TAL_PR_NOTICE("battery_is_charging level: %d", level);
+    TAL_PR_DEBUG("battery_is_charging level: %d", level);
 
     return level == charge_check_level;
 }
@@ -573,12 +551,24 @@ STATIC INT_T __tuya_ai_toy_battery_callback(UINT8_T current_capacity)
     BOOL_T boot_ready = tuya_ai_toy_boot_report_ready();
     OPERATE_RET report_rt = OPRT_OK;
 
-    TAL_PR_NOTICE("[%s], is_charging: %d, boot_ready: %d, cap: %u, status: %s(%d), prev_status: %d",
-                  __func__, is_charging, boot_ready, current_capacity,
-                  __battery_charge_status_str(charge_status), charge_status, prev_charge_status);
+    TAL_PR_DEBUG("[%s], is_charging: %d, boot_ready: %d, cap: %u, status: %s(%d), prev_status: %d",
+                 __func__, is_charging, boot_ready, current_capacity,
+                 __battery_charge_status_str(charge_status), charge_status, prev_charge_status);
     if (s_battery_cb) {
         s_battery_cb(current_capacity <= 20, is_charging);
     }
+
+#if defined(ENABLE_TUYA_UI) && (ENABLE_TUYA_UI == 1)
+    if (charge_status != s_last_ui_charge_status) {
+        if (charge_status == BATTERY_NO_CHARGE) {
+            UINT8_T display_capacity = (current_capacity != 0xff) ? current_capacity : last_capacity;
+            tuya_ai_display_msg(&display_capacity, 1, TY_DISPLAY_TP_STAT_BATTERY);
+        } else {
+            tuya_ai_display_msg(NULL, 0, TY_DISPLAY_TP_STAT_CHARGING);
+        }
+        s_last_ui_charge_status = charge_status;
+    }
+#endif
 
     if (!boot_ready) {
         if (current_capacity != 0xff) {
@@ -586,7 +576,7 @@ STATIC INT_T __tuya_ai_toy_battery_callback(UINT8_T current_capacity)
         }
         last_report_charge_status = charge_status;
         s_battery_report_baselined = FALSE;
-        TAL_PR_NOTICE("%s, skip battery report before boot ready, status=%d cap=%d", __func__, charge_status, current_capacity);
+        TAL_PR_DEBUG("%s, skip battery report before boot ready, status=%d cap=%d", __func__, charge_status, current_capacity);
         return 0;
     }
 
@@ -748,6 +738,7 @@ OPERATE_RET tuya_ai_toy_battery_init(VOID)
     s_battery_cb = _battery_cb;
     s_battery_report_baselined = FALSE;
     last_report_charge_status = -1;
+    s_last_ui_charge_status = -1;
 
     ai_battery_conf_t conf = {
         .mode = AI_BATTERY_MODE_ADC,

@@ -2,48 +2,46 @@
 #include "gui_common.h"
 #include "lvgl.h"
 
-LV_IMG_DECLARE(Nature128);
-LV_IMG_DECLARE(Fearful128);
-LV_IMG_DECLARE(Delicious128);
-LV_IMG_DECLARE(Think128);
-LV_IMG_DECLARE(Loving128);
-LV_IMG_DECLARE(Confused128);
-LV_IMG_DECLARE(Disappointed128);
-LV_IMG_DECLARE(Angry128);
-LV_IMG_DECLARE(Happy128);
-LV_IMG_DECLARE(Sad128);
-LV_IMG_DECLARE(Surprise128);
-LV_IMG_DECLARE(Touch128);
+LV_IMG_DECLARE(Neutral);
+LV_IMG_DECLARE(Fearful);
+LV_IMG_DECLARE(Think);
+LV_IMG_DECLARE(Confused);
+LV_IMG_DECLARE(Disappointed);
+LV_IMG_DECLARE(Angry);
+LV_IMG_DECLARE(Happy);
+LV_IMG_DECLARE(Sad);
+LV_IMG_DECLARE(Surprise);
+LV_IMG_DECLARE(Touched);
 
 static lv_obj_t *dual_eyes;
 static int current_gif_index = -1;
 
 static const gui_emotion_t gif_emotion[] = {
-    {&Nature128,         "neutral"      },
-    {&Loving128,         "loving"       },
-    {&Confused128,       "confused"     },
-    {&Delicious128,      "delicious"    },
-    {&Fearful128,        "fearful"      },
-    {&Think128,          "thinking"     },
-    {&Disappointed128,   "disappointed" },
-    {&Happy128,          "happy"        },
-    {&Sad128,            "sad"          },
-    {&Surprise128,       "surprise"     },
-    {&Angry128,          "angry"        },
-    {&Touch128,          "touch"        },
+    {&Neutral,         "neutral"      },
+    {&Happy,           "loving"       },
+    {&Confused,        "confused"     },
+    {&Happy,           "delicious"    },
+    {&Fearful,         "fearful"      },
+    {&Think,           "thinking"     },
+    {&Disappointed,    "disappointed" },
+    {&Happy,           "happy"        },
+    {&Sad,             "sad"          },
+    {&Surprise,        "surprise"     },
+    {&Angry,           "angry"        },
+    {&Touched,         "touch"        },
     /*----------------------------------- */
     // Single-eye aliases for cloud emotion names. Keep all of them on the
-    // 128x128 assets because this board only drives one eye screen.
-    {&Sad128,            "crying"       },
-    {&Happy128,          "laughing"     },
-    {&Happy128,          "winking"      },
-    {&Confused128,       "cool"         },
-    {&Confused128,       "embarrassed"  },
-    {&Surprise128,       "shocked"      },
-    {&Confused128,       "silly"        },
-    {&Surprise128,       "suprising"    },
-    {&Nature128,         "relaxed"      },
-    {&Nature128,         "sleepy"       },
+    // 160x160 assets because this board only drives one eye screen.
+    {&Sad,             "crying"       },
+    {&Happy,           "laughing"     },
+    {&Happy,           "winking"      },
+    {&Confused,        "cool"         },
+    {&Confused,        "embarrassed"  },
+    {&Surprise,        "shocked"      },
+    {&Confused,        "silly"        },
+    {&Surprise,        "suprising"    },
+    {&Neutral,         "relaxed"      },
+    {&Happy,           "sleepy"       },
 };
 
 #include "tal_log.h"
@@ -87,7 +85,7 @@ void eyes_test_separate_display(void)
 
     right_eye = lv_obj_create(obj);
     lv_obj_set_size(right_eye, LV_HOR_RES, LV_VER_RES / 2);
-    lv_obj_set_pos(right_eye, 0, 128);
+    lv_obj_set_pos(right_eye, 0, 160);
     lv_obj_set_style_pad_all(right_eye, 0, 0);
     lv_obj_set_style_border_width(right_eye, 0, 0);
     lv_obj_set_style_bg_color(right_eye, lv_color_hex(0x0000FF), 0);
