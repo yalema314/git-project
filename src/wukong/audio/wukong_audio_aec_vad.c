@@ -31,7 +31,7 @@ OPERATE_RET wukong_aec_vad_init(UINT32_T min_speech_len_ms, UINT32_T max_speech_
         param.min_speech_len = min_speech_len_ms;         //最短语音长度(ms)，太小会导致误报,默认200ms
         param.max_speech_interval = max_speech_interval_ms;   //最大语音间隔(ms) 太小会导致断句过快，默认1000ms
         rnn_vad_init(&param, __s_rnn_vad_handle);
-        wukong_vad_set_threshold(WUKONG_AUDIO_VAD_LOW);
+        wukong_vad_set_threshold(WUKONG_AUDIO_VAD_MID);
         TUYA_CHECK_NULL_GOTO(__s_rnn_vad_handle, __err_exit);
     }
 
@@ -92,7 +92,7 @@ OPERATE_RET wukong_vad_set_threshold(WUKONG_AUDIO_VAD_THRESHOLD_E level)
             rnn_vad_set_callback(__s_rnn_vad_handle, -40);
             break;
         case WUKONG_AUDIO_VAD_LOW:            
-            rnn_vad_set_callback(__s_rnn_vad_handle, -70);
+            rnn_vad_set_callback(__s_rnn_vad_handle, -50);
             break;
         default:
             break;

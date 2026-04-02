@@ -44,8 +44,9 @@
 /* BAT -> 806K -> GND, so VBAT = VADC * (806K + 2M) / 2M. */
 #define BATTERY_ADC_DIVIDER_UPPER_RES_KOHM 806U
 #define BATTERY_ADC_DIVIDER_LOWER_RES_KOHM 2000U
+#define BATTERY_ADC_TEMP                   700      (BATTERY_ADC_DIVIDER_UPPER_RES_KOHM + BATTERY_ADC_DIVIDER_LOWER_RES_KOHM)
 #define BATTERY_ADC_DIVIDER_NUMERATOR      (BATTERY_ADC_DIVIDER_UPPER_RES_KOHM + BATTERY_ADC_DIVIDER_LOWER_RES_KOHM)
-#define BATTERY_ADC_DIVIDER_DENOMINATOR    BATTERY_ADC_DIVIDER_UPPER_RES_KOHM
+#define BATTERY_ADC_DIVIDER_DENOMINATOR    BATTERY_ADC_DIVIDER_LOWER_RES_KOHM
 
 
 typedef enum {
@@ -130,8 +131,8 @@ INT_T tuya_ai_vol2cap_map_size(VOID)
 
 STATIC UINT32_T __adc_pin_voltage_to_battery_voltage(UINT32_T adc_pin_voltage)
 {
-    return (adc_pin_voltage * BATTERY_ADC_DIVIDER_NUMERATOR) /
-           BATTERY_ADC_DIVIDER_UPPER_RES_KOHM;
+    return ((adc_pin_voltage * BATTERY_ADC_DIVIDER_NUMERATOR) /
+           BATTERY_ADC_DIVIDER_LOWER_RES_KOHM);
 }
 
 STATIC VOID __sort_capacity_samples(UINT8_T *samples, UINT8_T count)
@@ -587,7 +588,7 @@ STATIC INT_T __tuya_ai_toy_battery_callback(UINT8_T current_capacity)
         TY_OBJ_DP_S batt_cap_dp_info[2];
         UINT_T dp_cnt = 0;
 
-        if (!is_charging && (current_capacity != 0xff)) {
+        if (current_capacity != 0xff) {
             batt_cap_dp_info[dp_cnt].dpid = 2;
             batt_cap_dp_info[dp_cnt].type = PROP_VALUE;
             batt_cap_dp_info[dp_cnt].value.dp_value = current_capacity;
@@ -603,7 +604,7 @@ STATIC INT_T __tuya_ai_toy_battery_callback(UINT8_T current_capacity)
 
         TAL_PR_NOTICE("%s, initial battery report sync, status=%s(%d), cap=%u, dp_cnt=%u",
                       __func__, __battery_charge_status_str(charge_status), charge_status, current_capacity, dp_cnt);
-        if (!is_charging && (current_capacity != 0xff)) {
+        if (current_capacity != 0xff) {
             TAL_PR_NOTICE("%s, report dpid2=%u dpid5=%d", __func__, current_capacity, charge_status);
         } else {
             TAL_PR_NOTICE("%s, report dpid5=%d", __func__, charge_status);
@@ -617,9 +618,7 @@ STATIC INT_T __tuya_ai_toy_battery_callback(UINT8_T current_capacity)
 
         if (current_capacity != 0xff) {
             last_report_capacity = current_capacity;
-            if (!is_charging) {
-                last_dp2_report_capacity = current_capacity;
-            }
+            last_dp2_report_capacity = current_capacity;
         }
         last_report_charge_status = charge_status;
         s_battery_report_baselined = TRUE;
@@ -678,9 +677,10 @@ STATIC INT_T __tuya_ai_toy_battery_callback(UINT8_T current_capacity)
         }
         last_report_charge_status = BATTERY_NO_CHARGE;
     } else {
+        BOOL_T capacity_changed = (current_capacity != 0xff) && (current_capacity != prev_dp2_report_capacity);
         BOOL_T charge_changed = (charge_status != prev_charge_status);
 
-        if (!charge_changed) {
+        if (!capacity_changed && !charge_changed) {
             if (current_capacity != 0xff) {
                 last_report_capacity = current_capacity;
             }
@@ -692,21 +692,44 @@ STATIC INT_T __tuya_ai_toy_battery_callback(UINT8_T current_capacity)
                       __battery_charge_status_str(prev_charge_status), prev_charge_status,
                       __battery_charge_status_str(charge_status), charge_status,
                       current_capacity);
-        TY_OBJ_DP_S batt_cap_dp_info;
-        batt_cap_dp_info.dpid = 5;
-        batt_cap_dp_info.type = PROP_ENUM;
-        batt_cap_dp_info.value.dp_enum = charge_status;
-        batt_cap_dp_info.time_stamp = 0;
+        TY_OBJ_DP_S batt_cap_dp_info[2];
+        UINT_T dp_cnt = 0;
 
-        TAL_PR_NOTICE("%s, report dpid5=%d", __func__, charge_status);
-        report_rt = dev_report_dp_json_async_force(NULL, &batt_cap_dp_info, 1);
+        if (capacity_changed) {
+            batt_cap_dp_info[dp_cnt].dpid = 2;
+            batt_cap_dp_info[dp_cnt].type = PROP_VALUE;
+            batt_cap_dp_info[dp_cnt].value.dp_value = current_capacity;
+            batt_cap_dp_info[dp_cnt].time_stamp = 0;
+            dp_cnt++;
+        }
+
+        if (charge_changed) {
+            batt_cap_dp_info[dp_cnt].dpid = 5;
+            batt_cap_dp_info[dp_cnt].type = PROP_ENUM;
+            batt_cap_dp_info[dp_cnt].value.dp_enum = charge_status;
+            batt_cap_dp_info[dp_cnt].time_stamp = 0;
+            dp_cnt++;
+        }
+
+        if (capacity_changed && charge_changed) {
+            TAL_PR_NOTICE("%s, report dpid2=%u dpid5=%d", __func__, current_capacity, charge_status);
+        } else if (capacity_changed) {
+            TAL_PR_NOTICE("%s, report dpid2=%u", __func__, current_capacity);
+        } else if (charge_changed) {
+            TAL_PR_NOTICE("%s, report dpid5=%d", __func__, charge_status);
+        }
+
+        report_rt = dev_report_dp_json_async_force(NULL, batt_cap_dp_info, dp_cnt);
         if (report_rt == OPRT_OK) {
-            TAL_PR_NOTICE("%s, battery dp report success, dp_cnt=1", __func__);
+            TAL_PR_NOTICE("%s, battery dp report success, dp_cnt=%u", __func__, dp_cnt);
         } else {
-            TAL_PR_ERR("%s, battery dp report failed, rt=%d, dp_cnt=1", __func__, report_rt);
+            TAL_PR_ERR("%s, battery dp report failed, rt=%d, dp_cnt=%u", __func__, report_rt, dp_cnt);
         }
         if (current_capacity != 0xff) {
             last_report_capacity = current_capacity;
+            if (capacity_changed) {
+                last_dp2_report_capacity = current_capacity;
+            }
         }
         last_report_charge_status = charge_status;
     }

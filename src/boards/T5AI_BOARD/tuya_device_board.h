@@ -37,7 +37,7 @@ extern "C" {
 #define TUYA_AI_TOY_SPK_EN_PIN          TUYA_GPIO_NUM_20
 #define TUYA_AI_TOY_LED_PIN             TUYA_GPIO_NUM_MAX
 #define TUYA_AI_TOY_NET_PIN             TUYA_GPIO_NUM_18
-#define TUYA_AI_TOY_MIC_GAIN_DEFAULT    80
+#define TUYA_AI_TOY_MIC_GAIN_DEFAULT    50
 
 // gc9a01 spi display pins
 #define TUYA_LCD_SPI_CLK_PIN            TUYA_GPIO_NUM_14
