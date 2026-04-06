@@ -91,16 +91,9 @@
 #define NETCFG_LONG_KEY_TIME   5000 /* 5 sec */
 
 #define AI_TOY_ALERT_PLAY_ID   "ai_toy_alert"
-#define AI_TOY_DP_SWITCH       102  //开机并联网成功
-#define AI_TOY_DP_WAKEUP       101  //唤醒状态
-#define AI_TOY_DP_IDLE         103  //空闲状态
-
-/* Normalize DP ids here to avoid legacy comment corruption above affecting preprocessing. */
-#undef AI_TOY_DP_SWITCH
-#undef AI_TOY_DP_WAKEUP
-#define AI_TOY_DP_SWITCH       102
-#define AI_TOY_DP_WAKEUP       101
-#define AI_TOY_DP_IDLE         103
+#define AI_TOY_DP_SWITCH       102  /* 开机并联网成功 */
+#define AI_TOY_DP_WAKEUP       101  /* 唤醒状态 */
+#define AI_TOY_DP_IDLE         103  /* 空闲状态 */
 
 /* ---------------------------------------------------------------------------
  * File scope variables

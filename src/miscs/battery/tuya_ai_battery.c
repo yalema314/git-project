@@ -39,6 +39,13 @@
 #define CAPACITY_CONFIDENCE_TRIM_CNT       2
 #define CAPACITY_STABLE_DIFF               4
 #define BATTERY_CAPACITY_JUMP_GUARD        15
+#define BATTERY_CHARGE_STATE_DEBOUNCE_TIMES 5
+#define BATTERY_CHARGE_STATE_DEBOUNCE_DELAY_MS 20
+#define BATTERY_CHARGE_ENTRY_SETTLE_CYCLES 2
+#define BATTERY_CHARGE_EXIT_RELAX_CYCLES   1
+#define BATTERY_CHARGING_STEP_MAX          2
+#define BATTERY_CHARGE_DONE_SAMPLE_CAPACITY 98
+#define BATTERY_CHARGE_DONE_CONFIRM_CNT    3
 #define BATTERY_CHARGE_DONE_CAPACITY       100
 
 /* BAT -> 806K -> GND, so VBAT = VADC * (806K + 2M) / 2M. */
@@ -66,13 +73,18 @@ STATIC THREAD_HANDLE __vol_conv_thread_handle = NULL;
 STATIC BOOL_T is_running = FALSE;
 STATIC BOOL_T is_stop = TRUE;
 STATIC BOOL_T s_is_battery_low = FALSE;
-// STATIC BOOL_T s_is_charging = FALSE;
+STATIC BOOL_T s_is_charging = FALSE;
 STATIC UINT8_T last_report_capacity = 0;
 STATIC UINT8_T last_dp2_report_capacity = 0xff;
 STATIC INT_T last_report_charge_status = -1;
 STATIC INT_T s_last_ui_charge_status = -1;
 STATIC BOOL_T s_battery_report_baselined = FALSE;
 STATIC TY_BATTERY_CB s_battery_cb = NULL;
+STATIC BOOL_T s_post_charge_recover_pending = FALSE;
+STATIC UINT8_T s_charge_entry_settle_cycles = 0;
+STATIC UINT8_T s_charge_exit_relax_cycles = 0;
+STATIC UINT8_T s_last_charge_sample_capacity = 0xff;
+STATIC UINT8_T s_charge_done_confirm_cnt = 0;
 
 STATIC TUYA_GPIO_LEVEL_E charge_check_level = TUYA_GPIO_LEVEL_LOW;
 
@@ -152,6 +164,56 @@ STATIC VOID __sort_capacity_samples(UINT8_T *samples, UINT8_T count)
 STATIC UINT8_T __capacity_abs_diff(UINT8_T lhs, UINT8_T rhs)
 {
     return (lhs >= rhs) ? (lhs - rhs) : (rhs - lhs);
+}
+
+STATIC BOOL_T __battery_charge_state_read(ai_battery_conf_t *bc)
+{
+    return bc->is_charging_cb && (bc->is_charging_cb() == TRUE);
+}
+
+STATIC BOOL_T __battery_charge_state_get_stable(ai_battery_conf_t *bc, BOOL_T stable_state)
+{
+    BOOL_T raw_state = __battery_charge_state_read(bc);
+    UINT8_T confirm_cnt = 0;
+    INT_T i;
+
+    if (raw_state == stable_state) {
+        return stable_state;
+    }
+
+    /* 对充电检测脚做一次短时间复检，避免插拔瞬间的毛刺直接切状态。 */
+    for (i = 0; i < BATTERY_CHARGE_STATE_DEBOUNCE_TIMES; i++) {
+        if (__battery_charge_state_read(bc) == raw_state) {
+            confirm_cnt++;
+        }
+        tal_system_sleep(BATTERY_CHARGE_STATE_DEBOUNCE_DELAY_MS);
+    }
+
+    if (confirm_cnt == BATTERY_CHARGE_STATE_DEBOUNCE_TIMES) {
+        return raw_state;
+    }
+
+    return stable_state;
+}
+
+STATIC VOID __battery_charge_enter(VOID)
+{
+    /* 进入充电先给采样一点稳定时间，避免刚插电时被抬高的电压立刻映射成大跳变。 */
+    s_charge_entry_settle_cycles = BATTERY_CHARGE_ENTRY_SETTLE_CYCLES;
+    s_charge_exit_relax_cycles = 0;
+    s_post_charge_recover_pending = FALSE;
+    s_last_charge_sample_capacity = 0xff;
+    s_charge_done_confirm_cnt = 0;
+}
+
+STATIC VOID __battery_charge_exit(VOID)
+{
+    /* 退出充电后先等电压回落，再允许用第一份稳定的非充电采样恢复真实电量。 */
+    s_charge_entry_settle_cycles = 0;
+    s_charge_exit_relax_cycles = BATTERY_CHARGE_EXIT_RELAX_CYCLES;
+    s_post_charge_recover_pending = TRUE;
+    s_last_charge_sample_capacity = 0xff;
+    s_charge_done_confirm_cnt = 0;
 }
 
 /**
@@ -309,6 +371,7 @@ STATIC UINT8_T __adc_confidence(ai_battery_conf_t *bc, UINT8_T *out)
 STATIC BOOL_T __battery_capacity_apply(UINT8_T sample_capacity, BOOL_T is_charging)
 {
     UINT8_T prev_capacity = last_capacity;
+    UINT8_T step = 0;
 
     if (sample_capacity == 0xff) {
         return FALSE;
@@ -320,10 +383,66 @@ STATIC BOOL_T __battery_capacity_apply(UINT8_T sample_capacity, BOOL_T is_chargi
     }
 
     if (is_charging) {
-        if ((sample_capacity > last_capacity) || (sample_capacity >= BATTERY_CHARGE_DONE_CAPACITY)) {
-            last_capacity = sample_capacity;
+        /* 充电开始后的前几轮只观察，不更新，先避开充电器接入瞬间的电压抬升。 */
+        if (s_charge_entry_settle_cycles > 0) {
+            s_last_charge_sample_capacity = sample_capacity;
+            s_charge_entry_settle_cycles--;
+            return FALSE;
         }
+
+        /* 满电需要连续确认，避免单次采样冲高就误判 charge_done。 */
+        if (sample_capacity >= BATTERY_CHARGE_DONE_SAMPLE_CAPACITY) {
+            if (s_charge_done_confirm_cnt < BATTERY_CHARGE_DONE_CONFIRM_CNT) {
+                s_charge_done_confirm_cnt++;
+            }
+
+            if (s_charge_done_confirm_cnt >= BATTERY_CHARGE_DONE_CONFIRM_CNT) {
+                last_capacity = BATTERY_CHARGE_DONE_CAPACITY;
+            }
+        } else {
+            s_charge_done_confirm_cnt = 0;
+        }
+
+        /*
+         * 充电时只有在原始采样继续创新高时才缓慢抬升电量。
+         * 这样可以避免 18 -> 72 这种由充电电压抬升带来的瞬时跳变。
+         */
+        if ((sample_capacity > last_capacity) &&
+            (s_last_charge_sample_capacity != 0xff) &&
+            (sample_capacity > s_last_charge_sample_capacity) &&
+            (last_capacity < BATTERY_CHARGE_DONE_CAPACITY)) {
+            step = sample_capacity - s_last_charge_sample_capacity;
+            if (step > BATTERY_CHARGING_STEP_MAX) {
+                step = BATTERY_CHARGING_STEP_MAX;
+            }
+            if ((last_capacity + step) > sample_capacity) {
+                last_capacity = sample_capacity;
+            } else {
+                last_capacity += step;
+            }
+        }
+
+        s_last_charge_sample_capacity = sample_capacity;
     } else {
+        s_charge_done_confirm_cnt = 0;
+        s_last_charge_sample_capacity = 0xff;
+
+        /* 刚退出充电时先等电压回落一轮，避免把表面电压当成真实剩余电量。 */
+        if (s_charge_exit_relax_cycles > 0) {
+            s_charge_exit_relax_cycles--;
+            return FALSE;
+        }
+
+        /*
+         * 退出充电后允许用第一份稳定的非充电采样恢复电量。
+         * 这是为了处理充电阶段电量被保守估计、拔充后需要追上真实值的场景。
+         */
+        if (s_post_charge_recover_pending) {
+            s_post_charge_recover_pending = FALSE;
+            last_capacity = sample_capacity;
+            return last_capacity != prev_capacity;
+        }
+
         if (sample_capacity > last_capacity) {
             PR_TRACE("ignore battery rise without charging: %u -> %u", last_capacity, sample_capacity);
             return FALSE;
@@ -342,7 +461,6 @@ STATIC BOOL_T __battery_capacity_apply(UINT8_T sample_capacity, BOOL_T is_chargi
 
 STATIC VOID __voltage_convert_task(VOID* arg)
 {
-    BOOL_T is_charging = FALSE;
     ai_battery_conf_t *bc = (ai_battery_conf_t *)arg;
     UINT8_T capacity = 0;
     BOOL_T capacity_changed = FALSE;
@@ -366,22 +484,34 @@ STATIC VOID __voltage_convert_task(VOID* arg)
 
     is_running = TRUE;
     is_stop = FALSE;
-    is_charging = bc->is_charging_cb && (bc->is_charging_cb() == TRUE);
+    s_is_charging = __battery_charge_state_get_stable(bc, FALSE);
+    if (s_is_charging) {
+        __battery_charge_enter();
+    } else {
+        __battery_charge_exit();
+        s_post_charge_recover_pending = FALSE;
+        s_charge_exit_relax_cycles = 0;
+    }
 
     while (is_running) {
-        BOOL_T charging_now = bc->is_charging_cb && (bc->is_charging_cb() == TRUE);
+        BOOL_T charging_now = __battery_charge_state_get_stable(bc, s_is_charging);
 
-        if (charging_now != is_charging) {
-            is_charging = charging_now;
+        if (charging_now != s_is_charging) {
+            s_is_charging = charging_now;
+            if (s_is_charging) {
+                __battery_charge_enter();
+            } else {
+                __battery_charge_exit();
+            }
             tuya_ai_battery_force_upload();
         }
 
         if (bc->mode == AI_BATTERY_MODE_ADC) {
             __adc_confidence(bc, &capacity);
-            capacity_changed = __battery_capacity_apply(capacity, is_charging);
+            capacity_changed = __battery_capacity_apply(capacity, s_is_charging);
             if (capacity_changed) {
-                PR_NOTICE("battery cap update: %u, charging=%d", last_capacity, is_charging);
-                if (!is_charging) {
+                PR_NOTICE("battery cap update: %u, charging=%d", last_capacity, s_is_charging);
+                if (!s_is_charging) {
 #ifdef ENABLE_TUYA_UI
                     tuya_ai_display_msg(&last_capacity, 1, TY_DISPLAY_TP_STAT_BATTERY);
 #endif
@@ -394,7 +524,7 @@ STATIC VOID __voltage_convert_task(VOID* arg)
             PR_ERR("%s, mode not support", __func__);
         }
 
-        tal_system_sleep(is_charging ? BATTERY_ADC_CHARGING_DELAY_MS : BATTERY_ADC_IDLE_DELAY_MS);
+        tal_system_sleep(s_is_charging ? BATTERY_ADC_CHARGING_DELAY_MS : BATTERY_ADC_IDLE_DELAY_MS);
     }
 
     is_stop = TRUE;
@@ -548,7 +678,7 @@ BOOL_T __tuya_ai_toy_battery_is_charging(VOID)
 
 STATIC INT_T __tuya_ai_toy_battery_callback(UINT8_T current_capacity)
 {
-    BOOL_T is_charging = __tuya_ai_toy_battery_is_charging();
+    BOOL_T is_charging = s_is_charging;
     BATTERY_CHAEGE_STATUS charge_status = __tuya_ai_toy_charge_status_get(is_charging, current_capacity);
     UINT8_T prev_dp2_report_capacity = last_dp2_report_capacity;
     INT_T prev_charge_status = last_report_charge_status;
@@ -756,7 +886,7 @@ UINT8_T tuya_ai_toy_capacity_value_get()
 
 BOOL_T tuya_ai_toy_charge_state_get()
 {
-    return __tuya_ai_toy_battery_is_charging();
+    return s_is_charging;
 }
 
 VOID_T tuya_ai_toy_charge_level_set(TUYA_GPIO_LEVEL_E level)
@@ -772,6 +902,12 @@ OPERATE_RET tuya_ai_toy_battery_init(VOID)
     last_dp2_report_capacity = 0xff;
     last_report_charge_status = -1;
     s_last_ui_charge_status = -1;
+    s_is_charging = FALSE;
+    s_post_charge_recover_pending = FALSE;
+    s_charge_entry_settle_cycles = 0;
+    s_charge_exit_relax_cycles = 0;
+    s_last_charge_sample_capacity = 0xff;
+    s_charge_done_confirm_cnt = 0;
 
     ai_battery_conf_t conf = {
         .mode = AI_BATTERY_MODE_ADC,
