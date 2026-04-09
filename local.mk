@@ -48,7 +48,16 @@ LOCAL_TUYA_SDK_INC += $(LOCAL_PATH)/src/wukong/utility
 
 ifeq ($(CONFIG_T5AI_BOARD), y)
 LOCAL_TUYA_SDK_INC += $(LOCAL_PATH)/src/boards/T5AI_BOARD/
+# 将 build/tuya_app.config 中的 UI 变体配置同步成编译宏，保证资源裁剪
+# 与 C 代码中的运行时分支使用同一份开关。
+ifeq ($(CONFIG_SUPERT_USE_EYES_UI), y)
+LOCAL_TUYA_SDK_CFLAGS += -DSUPERT_USE_EYES_UI=1
+# 当前 SuperT 默认构建使用 T5AI_BOARD 硬件配置；只有在标准板显式
+# 选择 EYES UI 变体时，才复用 EYES 目录下的 UI 资源与素材。
 LOCAL_TUYA_SDK_INC += $(LOCAL_PATH)/src/boards/T5AI_BOARD_EYES/
+else
+LOCAL_TUYA_SDK_CFLAGS += -DSUPERT_USE_EYES_UI=0
+endif
 LOCAL_SRC_FILES := $(LOCAL_PATH)/src/boards/T5AI_BOARD/tuya_device_board.c
 endif
 
@@ -213,9 +222,13 @@ LOCAL_SRC_FILES += $(shell find $(LOCAL_PATH)/src/miscs/gui/tuya_lvgl_weather/sr
 LOCAL_SRC_FILES += $(shell find $(LOCAL_PATH)/src/miscs/gui/tuya_lvgl_cloud_recipe/src -name "*.c" -o -name "*.cpp" -o -name "*.cc")
 
 ifeq ($(CONFIG_T5AI_BOARD), y)
+# 标准板始终保留 wechat UI 入口；如果启用 EYES 变体，再额外编译
+# EYES 的入口与表情资源，GPIO 与板级初始化仍只来自 T5AI_BOARD。
 LOCAL_SRC_FILES += $(LOCAL_PATH)/src/boards/T5AI_BOARD/ui/wechat_app.c
+ifeq ($(CONFIG_SUPERT_USE_EYES_UI), y)
 LOCAL_SRC_FILES += $(LOCAL_PATH)/src/boards/T5AI_BOARD_EYES/ui/eyes_app.c
 LOCAL_SRC_FILES += $(shell find $(LOCAL_PATH)/src/boards/T5AI_BOARD_EYES/ui/eyes  -name "*.c" -o -name "*.cpp" -o -name "*.cc")
+endif
 endif
 
 ifeq ($(CONFIG_T5AI_BOARD_EYES), y)

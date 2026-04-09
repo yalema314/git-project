@@ -155,8 +155,10 @@ STATIC VOID __qrcode_active_shorturl_cb(CONST CHAR_T *shorturl)
  * --------------------------------------------------------------------------- */
 
 /**
- * @brief Callback when the device receives firmware upgrade information from the cloud.
- * Used for OTA; this implementation only logs the upgrade info and returns OPRT_OK.
+ * @brief OTA notification hook for the main network module.
+ * SuperT does not register a pre-upgrade override callback, so the framework
+ * still performs the actual download/write flow. This callback is kept only to
+ * log the upgrade metadata that comes from the cloud.
  * @param[in] fw Firmware upgrade info (type, URL, HMAC, version, size).
  * @return OPRT_OK. See tuya_error_code.h for other codes.
  */
@@ -451,7 +453,8 @@ OPERATE_RET __soc_device_init(VOID_T)
     tuya_p2p_sdk_subscribe_iot_init_event();
 #endif
 
-    /* Register IoT callbacks: cloud status, upgrade, reset, DP object/raw, DP query, optional short URL. */
+    /* Register IoT callbacks. Keep gw_ug_cb as a log hook only: main-firmware OTA
+     * is still handled by the framework because SuperT does not register a pre-upgrade override. */
     TY_IOT_CBS_S iot_cbs = {0};
     iot_cbs.gw_status_cb    = __soc_dev_status_changed_cb;
     iot_cbs.gw_ug_cb        = __soc_dev_rev_upgrade_info_cb;

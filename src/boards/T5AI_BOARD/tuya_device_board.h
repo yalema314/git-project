@@ -68,7 +68,11 @@ extern "C" {
 #define TUYA_LCD_HEIGHT       240
 #define TUYA_LCD_ROTATION     TUYA_SCREEN_ROTATION_0
 #define LCD_FPS               15
+/* Prefer the Kconfig-generated UI variant switch. Keep the default as EYES so
+ * older local configs still behave like the current standard SuperT build. */
+#ifndef SUPERT_USE_EYES_UI
 #define SUPERT_USE_EYES_UI    1
+#endif
 
 // enable ai opus encode
 #define ENABLE_APP_OPUS_ENCODER 1

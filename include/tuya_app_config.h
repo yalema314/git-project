@@ -25,6 +25,7 @@ extern "C" {
 #define USING_BOARD_AUDIO_INPUT 1
 #define USING_BOARD_AUDIO_OUTPUT 1
 #define T5AI_BOARD 1
+#define SUPERT_USE_EYES_UI 1
 // CONFIG_T5AI_BOARD_EYES is not set
 // CONFIG_T5AI_BOARD_EVB is not set
 // CONFIG_T5AI_BOARD_ROBOT is not set

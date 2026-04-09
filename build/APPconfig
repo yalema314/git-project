@@ -110,6 +110,12 @@ menuconfig APP_CONFIG
 
     endchoice
 
+    # Split standard-board hardware selection from the UI variant selection.
+    config SUPERT_USE_EYES_UI
+        bool "Use EYES UI variant on T5AI_BOARD"
+        depends on T5AI_BOARD
+        default y
+
     if (T5AI_BOARD || T5AI_BOARD_EYES || T5AI_BOARD_ROBOT || T5AI_BOARD_EVB_PRO ||T5AI_BOARD_DESKTOP)
         menuconfig ENABLE_TUYA_CAMERA
             bool "ENABLE_TUYA_CAMERA"

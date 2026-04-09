@@ -746,22 +746,25 @@ STATIC VOID __on_ai_toy_network_cfg_timer(TIMER_ID timer_id, VOID_T *arg)
     wukong_audio_player_alert(AI_TOY_ALERT_TYPE_NETWORK_CFG, FALSE);
 }
 
-/** Configure GPIO as wakeup source (rising edge) for deep sleep. */
+/** Configure GPIO as wakeup source for deep sleep.
+ * The audio trigger key is initialized as active-low with an internal pull-up,
+ * so the deep-sleep wake source must also use pull-up + falling-edge wake.
+ */
 STATIC VOID __ai_toy_set_wakeup_source(UINT32_T pin)
 {
     TAL_PR_NOTICE("ai toy -> set wakeup pin %d", pin);
-    /* Config pin as input floating. */
+    /* Keep the wake key in the same idle state as the runtime key config. */
     TUYA_GPIO_BASE_CFG_T io_cfg;
     io_cfg.direct = TUYA_GPIO_INPUT;
-    io_cfg.mode = TUYA_GPIO_FLOATING;
-    io_cfg.level = TUYA_GPIO_LEVEL_LOW;
+    io_cfg.mode = TUYA_GPIO_PULLUP;
+    io_cfg.level = TUYA_GPIO_LEVEL_HIGH;
     tkl_gpio_init(pin, &io_cfg);
 
-    /* Register as wakeup source: rising edge on this GPIO wakes from deep sleep. */
+    /* Active-low key: wake when the line falls on key press. */
     TUYA_WAKEUP_SOURCE_BASE_CFG_T cfg;
     cfg.source = TUYA_WAKEUP_SOURCE_GPIO;
     cfg.wakeup_para.gpio_param.gpio_num = pin;
-    cfg.wakeup_para.gpio_param.level = TUYA_GPIO_WAKEUP_RISE;
+    cfg.wakeup_para.gpio_param.level = TUYA_GPIO_WAKEUP_FALL;
     tkl_wakeup_source_set(&cfg);
     tal_system_sleep(200);
 }
