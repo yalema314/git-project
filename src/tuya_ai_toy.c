@@ -284,6 +284,20 @@ STATIC OPERATE_RET __ai_toy_report_volum(VOID)
     return tuya_report_dp_async(devid, &dp, 1, NULL);
 }
 
+/** Clamp external volume requests into the player-supported 0~100 range. */
+STATIC UINT8_T __ai_toy_volume_clamp(INT_T value)
+{
+    if (value < 0) {
+        return 0;
+    }
+
+    if (value > 100) {
+        return 100;
+    }
+
+    return (UINT8_T)value;
+}
+
 /** Save volume and trigger_mode to KV (AI_TOY_PARA). */
 STATIC OPERATE_RET __ai_toy_config_save(VOID)
 {
@@ -303,14 +317,17 @@ STATIC OPERATE_RET __ai_toy_config_save(VOID)
 STATIC OPERATE_RET __ai_toy_config_load(VOID)
 {
     TAL_PR_NOTICE("ai toy -> load config");
-    OPERATE_RET rt = OPRT_OK;
     BYTE_T *value = NULL;
     UINT_T len = 0;
 
     /* Default volume before reading KV. */
     s_ai_toy->volume = TY_SPK_DEFAULT_VOL;
 
-    TUYA_CALL_ERR_RETURN(wd_common_read(AI_TOY_PARA, &value, &len));
+    /* Missing history is not fatal: keep defaults on first boot or after cleanup. */
+    if (wd_common_read(AI_TOY_PARA, &value, &len) != OPRT_OK) {
+        TAL_PR_NOTICE("ai toy -> no saved config, use defaults");
+        return OPRT_OK;
+    }
     TAL_PR_DEBUG("read ai_toy config: %s", value);
     ty_cJSON *root = ty_cJSON_Parse((CONST CHAR_T *)value);
     wd_common_free_data(value);
@@ -336,6 +353,34 @@ STATIC OPERATE_RET __ai_toy_config_load(VOID)
     return OPRT_OK;
 }
 
+/** Apply volume to runtime, UI and cloud, with optional persistence for user-driven changes. */
+STATIC OPERATE_RET __ai_toy_volume_apply(INT_T value, BOOL_T persist, BOOL_T report)
+{
+    OPERATE_RET rt = OPRT_OK;
+    UINT8_T volume = __ai_toy_volume_clamp(value);
+
+    TUYA_CHECK_NULL_RETURN(s_ai_toy, OPRT_RESOURCE_NOT_READY);
+
+    /* Skip duplicate writes, but still allow callers to refresh persistence/report when required. */
+    if (s_ai_toy->volume != volume) {
+        s_ai_toy->volume = volume;
+        TUYA_CALL_ERR_LOG(wukong_audio_player_set_vol(s_ai_toy->volume));
+#if defined(ENABLE_TUYA_UI)
+        tuya_ai_display_msg(&s_ai_toy->volume, 1, TY_DISPLAY_TP_VOLUME);
+#endif
+    }
+
+    if (persist) {
+        TUYA_CALL_ERR_RETURN(__ai_toy_config_save());
+    }
+
+    if (report) {
+        TUYA_CALL_ERR_LOG(__ai_toy_report_volum());
+    }
+
+    return rt;
+}
+
 /* ---------------------------------------------------------------------------
  * Key and network callbacks
  * --------------------------------------------------------------------------- */
@@ -348,17 +393,20 @@ STATIC VOID __on_ai_toy_net_pin(UINT_T port, PUSH_KEY_TYPE_E type, INT_T cnt)
     case NORMAL_KEY:
         TAL_PR_DEBUG("net pin normal press trigger volume up!");
         if (s_ai_toy && s_ai_toy->volume < 100) {
+            INT_T next_volume = s_ai_toy->volume;
+            OPERATE_RET op_ret = OPRT_OK;
+
             if (s_ai_toy->volume % TOY_VOLUME_SETUP) {
-                s_ai_toy->volume = (s_ai_toy->volume / TOY_VOLUME_SETUP + 1) * TOY_VOLUME_SETUP;
+                next_volume = (s_ai_toy->volume / TOY_VOLUME_SETUP + 1) * TOY_VOLUME_SETUP;
             } else {
-                s_ai_toy->volume += TOY_VOLUME_SETUP;
+                next_volume = s_ai_toy->volume + TOY_VOLUME_SETUP;
             }
-            TAL_PR_DEBUG("volume %d", s_ai_toy->volume);
-            wukong_audio_player_set_vol(s_ai_toy->volume);
-#ifdef ENABLE_TUYA_UI
-            tuya_ai_display_msg(&s_ai_toy->volume, 1, TY_DISPLAY_TP_VOLUME);
-#endif
-            __ai_toy_report_volum();
+            TAL_PR_DEBUG("volume %d", next_volume);
+            /* Use the canonical volume setter so key changes share the same save/report flow. */
+            op_ret = tuya_ai_toy_volume_set((UINT8_T)__ai_toy_volume_clamp(next_volume));
+            if (OPRT_OK != op_ret) {
+                TAL_PR_ERR("net pin volume up failed: %d", op_ret);
+            }
         }
         break;
 
@@ -373,17 +421,20 @@ STATIC VOID __on_ai_toy_net_pin(UINT_T port, PUSH_KEY_TYPE_E type, INT_T cnt)
     case SEQ_KEY:
         TAL_PR_DEBUG("net pin seq press trigger volume down!");
         if (s_ai_toy && s_ai_toy->volume > 0) {
+            INT_T next_volume = s_ai_toy->volume;
+            OPERATE_RET op_ret = OPRT_OK;
+
             if (s_ai_toy->volume % TOY_VOLUME_SETUP) {
-                s_ai_toy->volume = (s_ai_toy->volume / TOY_VOLUME_SETUP) * TOY_VOLUME_SETUP;
+                next_volume = (s_ai_toy->volume / TOY_VOLUME_SETUP) * TOY_VOLUME_SETUP;
             } else {
-                s_ai_toy->volume -= TOY_VOLUME_SETUP;
+                next_volume = s_ai_toy->volume - TOY_VOLUME_SETUP;
             }
-            TAL_PR_DEBUG("volume %d", s_ai_toy->volume);
-            wukong_audio_player_set_vol(s_ai_toy->volume);
-#ifdef ENABLE_TUYA_UI
-            tuya_ai_display_msg(&s_ai_toy->volume, 1, TY_DISPLAY_TP_VOLUME);
-#endif
-            __ai_toy_report_volum();
+            TAL_PR_DEBUG("volume %d", next_volume);
+            /* Use the canonical volume setter so key changes share the same save/report flow. */
+            op_ret = tuya_ai_toy_volume_set((UINT8_T)__ai_toy_volume_clamp(next_volume));
+            if (OPRT_OK != op_ret) {
+                TAL_PR_ERR("net pin volume down failed: %d", op_ret);
+            }
         }
         break;
 
@@ -906,13 +957,14 @@ VOID tuya_ai_toy_dp_process(CONST TY_RECV_OBJ_DP_S *dp)
         } else if (dp->dps[index].dpid == 3 && dp->dps[index].type == PROP_VALUE) {
             /* dpid 3: volume (0~100). Update local volume, player, display and report. */
             TAL_PR_DEBUG("SOC Rev DP Obj Cmd dpid:%d type:%d value:%d", dp->dps[index].dpid, dp->dps[index].type, dp->dps[index].value.dp_value);
-            if (dp->dps[index].value.dp_value <= 100 && dp->dps[index].value.dp_value >= 0 && s_ai_toy->volume != dp->dps[index].value.dp_value) {
-                s_ai_toy->volume = dp->dps[index].value.dp_value;
-                wukong_audio_player_set_vol(s_ai_toy->volume);
-#if defined(ENABLE_TUYA_UI)
-                tuya_ai_display_msg(&s_ai_toy->volume, 1, TY_DISPLAY_TP_VOLUME);
-#endif
-                __ai_toy_report_volum();
+            if (dp->dps[index].value.dp_value <= 100 && dp->dps[index].value.dp_value >= 0) {
+                OPERATE_RET op_ret = OPRT_OK;
+
+                /* Persist App-side volume changes through the same canonical setter as local keys. */
+                op_ret = tuya_ai_toy_volume_set((UINT8_T)dp->dps[index].value.dp_value);
+                if (OPRT_OK != op_ret) {
+                    TAL_PR_ERR("dp volume set failed: %d", op_ret);
+                }
             }
         }
     }
@@ -960,26 +1012,16 @@ VOID tuya_ai_toy_idle_timer_ctrl(BOOL_T enable)
 
 OPERATE_RET tuya_ai_toy_volume_set(UINT8_T value)
 {
-    __ai_toy_config_load();
-
-    s_ai_toy->volume = value;
-
-    /* Persist to KV (volume + trigger_mode), then apply to player and report to cloud. */
-    OPERATE_RET rt = OPRT_OK;
-    CHAR_T buf[64] = {0};
-    snprintf(buf, sizeof(buf), "{\"volume\": %d, \"trigger_mode\":%d}", s_ai_toy->volume, s_ai_toy->cfg.trigger_mode);
-    TUYA_CALL_ERR_RETURN(wd_common_write(AI_TOY_PARA, (CONST BYTE_T *)buf, strlen(buf)));
-
-    TAL_PR_DEBUG("set volume: %s", buf);
-
-    wukong_audio_player_set_vol(s_ai_toy->volume);
-    __ai_toy_report_volum();
-
-    return rt;
+    /* Route all external setters through the same persistence/report path. */
+    return __ai_toy_volume_apply(value, TRUE, TRUE);
 }
 
 UINT8_T tuya_ai_toy_volume_get(VOID)
 {
-    __ai_toy_config_load();
+    /* Fall back to the build default before runtime init finishes. */
+    if (NULL == s_ai_toy) {
+        return TY_SPK_DEFAULT_VOL;
+    }
+
     return s_ai_toy->volume;
 }

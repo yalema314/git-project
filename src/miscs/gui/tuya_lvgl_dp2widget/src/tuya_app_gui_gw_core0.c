@@ -49,6 +49,7 @@
 #include "gw_intf.h"
 #include "tal_mutex.h"
 #include "ty_gui_fs.h"
+#include "tuya_ai_toy.h"
 #ifdef TUYA_APP_MULTI_CORE_IPC
 #include "tkl_ipc.h"
 #endif
@@ -979,13 +980,16 @@ STATIC VOID_T gui_audio_play_async_task(VOID_T *args)
             }
             else if (audio_evt->audio_evt_type == T_GUI_AUDIO_EVT_VOLUME) {
                 #ifdef AUDIO_HW_INIT_BY_OTHERS
-                    //send to ai module to set volume
+                    /* Keep GUI volume in sync with the AI toy when it owns the audio hardware. */
+                    if (tuya_ai_toy_volume_set((UINT8_T)audio_evt->volume) == OPRT_OK) {
+                        gui_spk_volume = tuya_ai_toy_volume_get();
+                    }
                 #else
-                    //local set volume
+                    /* Persist GUI-local speaker volume only when GUI owns the audio hardware. */
                     tkl_ao_set_vol(TKL_AUDIO_TYPE_BOARD, TKL_AO_0, NULL, audio_evt->volume);
+                    gui_spk_volume = audio_evt->volume;
+                    gui_audio_play_volume_delay_restore();
                 #endif
-                gui_spk_volume = audio_evt->volume;
-                gui_audio_play_volume_delay_restore();
             }
             else if (audio_evt->audio_evt_type == T_GUI_AUDIO_EVT_PAUSE) {
                 #ifdef AUDIO_HW_INIT_BY_OTHERS
@@ -1101,6 +1105,10 @@ STATIC OPERATE_RET gui_voice_event_cd(TUYA_VOICE_SVC_EVT_INFO_S *info, VOID *use
 
 INT32_T gui_audio_play_volume_get(VOID)
 {
+#ifdef AUDIO_HW_INIT_BY_OTHERS
+    /* Query the AI toy so GUI sliders always show the canonical device volume. */
+    gui_spk_volume = (INT32_T)tuya_ai_toy_volume_get();
+#endif
     return gui_spk_volume;
 }
 

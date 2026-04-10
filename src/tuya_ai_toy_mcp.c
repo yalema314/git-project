@@ -21,7 +21,6 @@
 #include "tuya_ai_agent.h"
 #include "tal_log.h"
 #include "wukong_ai_mcp_server.h"
-#include "wukong_audio_player.h"
 #if defined(T5AI_BOARD_DESKTOP) && T5AI_BOARD_DESKTOP == 1
 #include "tuya_motion_ctrl.h"
 #endif
@@ -84,23 +83,11 @@ OPERATE_RET __take_photo(CONST MCP_PROPERTY_LIST_T *properties, MCP_RETURN_VALUE
 }
 #endif
 
-STATIC OPERATE_RET __report_volume(INT_T volume)
-{
-    // report volume dp to cloud
-    CHAR_T *devid = tuya_iot_get_gw_id();
-    TY_OBJ_DP_S dp = {
-        .dpid = 3,
-        .type = PROP_VALUE,
-        .value.dp_value = volume,
-    };
-
-    return tuya_report_dp_async(devid, &dp, 1, NULL);
-}
-
 // __set_volume
 STATIC OPERATE_RET __set_volume(CONST MCP_PROPERTY_LIST_T *properties, MCP_RETURN_VALUE_T *ret_val, VOID *user_data)
 {
     INT_T volume = 50; // default volume
+    OPERATE_RET rt = OPRT_OK;
 
     TAL_PR_DEBUG("__set_volume enter");
 
@@ -113,9 +100,8 @@ STATIC OPERATE_RET __set_volume(CONST MCP_PROPERTY_LIST_T *properties, MCP_RETUR
         }
     }
 
-    // FIXME: Implement actual volume setting logic here
-    wukong_audio_player_set_vol(volume);
-    __report_volume(volume);
+    /* Reuse the AI toy volume API so MCP follows the same save/report behavior as keys and App DP. */
+    TUYA_CALL_ERR_RETURN(tuya_ai_toy_volume_set((UINT8_T)volume));
     TAL_PR_DEBUG("set volume to %d", volume);
 
     // Set return value

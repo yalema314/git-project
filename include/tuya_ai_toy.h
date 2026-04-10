@@ -120,4 +120,17 @@ VOID tuya_ai_toy_wakeup_dp_report(BOOL_T enable);
  */
 BOOL_T tuya_ai_toy_boot_report_ready(VOID);
 
+/**
+ * @brief Set device speaker volume and persist it as the canonical runtime value.
+ * @param value Volume in range 0~100; out-of-range values are clamped by the implementation.
+ * @return OPERATE_RET
+ */
+OPERATE_RET tuya_ai_toy_volume_set(UINT8_T value);
+
+/**
+ * @brief Get the current canonical device speaker volume.
+ * @return Volume in range 0~100.
+ */
+UINT8_T tuya_ai_toy_volume_get(VOID);
+	
 #endif /* __TUYA_AI_TOY_H__ */

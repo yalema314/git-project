@@ -28,7 +28,7 @@ extern "C" {
 #include "tuya_device_board.h"
 
 /** Default speaker volume (0~100). */
-#define TY_SPK_DEFAULT_VOL 70
+#define TY_SPK_DEFAULT_VOL 60
 
 /** Default language: 0 = Chinese, 1 = English. */
 #define TY_AI_DEFAULT_LANG 1
