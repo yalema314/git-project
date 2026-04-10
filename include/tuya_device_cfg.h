@@ -45,6 +45,9 @@ extern "C" {
 /** Enable cloud alert. */
 #define ENABLE_CLOUD_ALERT 0
 
+/** Enable voice alarm MCP tools without requiring any screen UI. */
+#define ENABLE_APP_MCP_CLOCK_ALARM 1
+
 /** Default AI toy config initializer (GPIO and trigger mode from board). */
 #define TY_AI_TOY_CFG_DEFAULT { \
     .audio_trigger_pin = TUYA_AI_TOY_AUDIO_TRIGGER_PIN, \

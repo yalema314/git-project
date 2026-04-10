@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include "tuya_ai_toy.h"
 #include "tuya_ai_agent.h"
+#include "tuya_device_cfg.h"
 #include "tal_log.h"
 #include "wukong_ai_mcp_server.h"
 #if defined(T5AI_BOARD_DESKTOP) && T5AI_BOARD_DESKTOP == 1
@@ -134,6 +135,280 @@ STATIC OPERATE_RET __set_mode(CONST MCP_PROPERTY_LIST_T *properties, MCP_RETURN_
 
     return OPRT_OK;
 }
+
+#if defined(ENABLE_APP_MCP_CLOCK_ALARM) && (ENABLE_APP_MCP_CLOCK_ALARM == 1)
+// __set_alarm
+STATIC OPERATE_RET __set_alarm(CONST MCP_PROPERTY_LIST_T *properties, MCP_RETURN_VALUE_T *ret_val, VOID *user_data)
+{
+    OPERATE_RET rt = OPRT_OK;
+    INT_T operation = 0;
+    CHAR_T *alarm_time = NULL;
+    CHAR_T *detail_time = NULL;
+    CHAR_T *label = NULL;
+    UCHAR_T hours = 0;
+    UCHAR_T minutes = 0;
+    INT_T parsed_hours = 0;
+    INT_T parsed_minutes = 0;
+    TIME_T detail_time_posix = 0;
+    INT_T repeat_sched_freq = 0;
+    UCHAR_T mon_of_week = 0, tue_of_week = 0, wed_of_week = 0, thu_of_week = 0, fri_of_week = 0, sat_of_week = 0, sun_of_week = 0;
+    BOOL_T snooze_enabled = 0;
+    INT_T snooze_interval = 0;
+    UCHAR_T snooze_count = 0;
+    BOOL_T delete_all = FALSE;
+    BOOL_T alarm_time_ready = FALSE;
+
+    TAL_PR_DEBUG("__set_alarm enter");
+
+    // Parse the MCP alarm tool payload into the local alarm structure used by skill_clock.
+    for (INT_T i = 0; i < properties->count; i++) {
+        MCP_PROPERTY_T *prop = properties->properties[i];
+        if (strcmp(prop->name, "operation") == 0 && prop->type == MCP_PROPERTY_TYPE_INTEGER) {
+            operation = prop->default_val.int_val;
+            break;
+        }
+    }
+
+    for (INT_T i = 0; i < properties->count; i++) {
+        MCP_PROPERTY_T *prop = properties->properties[i];
+        if (strcmp(prop->name, "delete_all") == 0 && prop->type == MCP_PROPERTY_TYPE_BOOLEAN) {
+            delete_all = prop->default_val.bool_val;
+            break;
+        }
+    }
+
+    for (INT_T i = 0; i < properties->count; i++) {
+        MCP_PROPERTY_T *prop = properties->properties[i];
+        if (strcmp(prop->name, "alarm_time") == 0 && prop->type == MCP_PROPERTY_TYPE_STRING) {
+            alarm_time = prop->default_val.str_val;
+            break;
+        }
+    }
+
+    for (INT_T i = 0; i < properties->count; i++) {
+        MCP_PROPERTY_T *prop = properties->properties[i];
+        if (strcmp(prop->name, "detail_time") == 0 && prop->type == MCP_PROPERTY_TYPE_STRING) {
+            detail_time = prop->default_val.str_val;
+            break;
+        }
+    }
+
+    for (INT_T i = 0; i < properties->count; i++) {
+        MCP_PROPERTY_T *prop = properties->properties[i];
+        if (strcmp(prop->name, "label") == 0 && prop->type == MCP_PROPERTY_TYPE_STRING) {
+            label = prop->default_val.str_val;
+            break;
+        }
+    }
+
+    for (INT_T i = 0; i < properties->count; i++) {
+        MCP_PROPERTY_T *prop = properties->properties[i];
+        if (strcmp(prop->name, "repeat_sched_freq") == 0 && prop->type == MCP_PROPERTY_TYPE_INTEGER) {
+            repeat_sched_freq = prop->default_val.int_val;
+            break;
+        }
+    }
+
+    for (INT_T i = 0; i < properties->count; i++) {
+        MCP_PROPERTY_T *prop = properties->properties[i];
+        if (strcmp(prop->name, "mon_of_week") == 0 && prop->type == MCP_PROPERTY_TYPE_INTEGER) {
+            mon_of_week = prop->default_val.int_val;
+            break;
+        }
+    }
+
+    for (INT_T i = 0; i < properties->count; i++) {
+        MCP_PROPERTY_T *prop = properties->properties[i];
+        if (strcmp(prop->name, "tue_of_week") == 0 && prop->type == MCP_PROPERTY_TYPE_INTEGER) {
+            tue_of_week = prop->default_val.int_val;
+            break;
+        }
+    }
+
+    for (INT_T i = 0; i < properties->count; i++) {
+        MCP_PROPERTY_T *prop = properties->properties[i];
+        if (strcmp(prop->name, "wed_of_week") == 0 && prop->type == MCP_PROPERTY_TYPE_INTEGER) {
+            wed_of_week = prop->default_val.int_val;
+            break;
+        }
+    }
+
+    for (INT_T i = 0; i < properties->count; i++) {
+        MCP_PROPERTY_T *prop = properties->properties[i];
+        if (strcmp(prop->name, "thu_of_week") == 0 && prop->type == MCP_PROPERTY_TYPE_INTEGER) {
+            thu_of_week = prop->default_val.int_val;
+            break;
+        }
+    }
+
+    for (INT_T i = 0; i < properties->count; i++) {
+        MCP_PROPERTY_T *prop = properties->properties[i];
+        if (strcmp(prop->name, "fri_of_week") == 0 && prop->type == MCP_PROPERTY_TYPE_INTEGER) {
+            fri_of_week = prop->default_val.int_val;
+            break;
+        }
+    }
+
+    for (INT_T i = 0; i < properties->count; i++) {
+        MCP_PROPERTY_T *prop = properties->properties[i];
+        if (strcmp(prop->name, "sat_of_week") == 0 && prop->type == MCP_PROPERTY_TYPE_INTEGER) {
+            sat_of_week = prop->default_val.int_val;
+            break;
+        }
+    }
+
+    for (INT_T i = 0; i < properties->count; i++) {
+        MCP_PROPERTY_T *prop = properties->properties[i];
+        if (strcmp(prop->name, "sun_of_week") == 0 && prop->type == MCP_PROPERTY_TYPE_INTEGER) {
+            sun_of_week = prop->default_val.int_val;
+            break;
+        }
+    }
+
+    for (INT_T i = 0; i < properties->count; i++) {
+        MCP_PROPERTY_T *prop = properties->properties[i];
+        if (strcmp(prop->name, "snooze_enabled") == 0 && prop->type == MCP_PROPERTY_TYPE_INTEGER) {
+            snooze_enabled = prop->default_val.int_val;
+            break;
+        }
+    }
+
+    for (INT_T i = 0; i < properties->count; i++) {
+        MCP_PROPERTY_T *prop = properties->properties[i];
+        if (strcmp(prop->name, "snooze_interval") == 0 && prop->type == MCP_PROPERTY_TYPE_INTEGER) {
+            snooze_interval = prop->default_val.int_val;
+            break;
+        }
+    }
+
+    for (INT_T i = 0; i < properties->count; i++) {
+        MCP_PROPERTY_T *prop = properties->properties[i];
+        if (strcmp(prop->name, "snooze_count") == 0 && prop->type == MCP_PROPERTY_TYPE_INTEGER) {
+            snooze_count = prop->default_val.int_val;
+            break;
+        }
+    }
+
+    // detail_time 支持秒级绝对时间，用于一次性短时提醒。
+    if ((detail_time != NULL) && (strlen(detail_time) > 0)) {
+        detail_time_posix = wukong_clock_time_mktime(detail_time);
+        if (detail_time_posix > 0) {
+            POSIX_TM_S detail_tm;
+
+            memset(&detail_tm, 0, SIZEOF(detail_tm));
+            tal_time_get_local_time_custom(detail_time_posix, &detail_tm);
+            hours = (UCHAR_T)detail_tm.tm_hour;
+            minutes = (UCHAR_T)detail_tm.tm_min;
+            alarm_time_ready = TRUE;
+        }
+    }
+
+    if ((alarm_time != NULL) && (strlen(alarm_time) > 0)) {
+        if (sscanf(alarm_time, "%d:%d", &parsed_hours, &parsed_minutes) == 2) {
+            hours = (UCHAR_T)parsed_hours;
+            minutes = (UCHAR_T)parsed_minutes;
+            alarm_time_ready = TRUE;
+        } else {
+            TAL_PR_ERR("parse alarm_time '%s' fail !", alarm_time);
+            if (((operation == AI_CLOCK_ALARM_OPR_ADD) || (operation == AI_CLOCK_ALARM_OPR_UPDATE)) &&
+                (repeat_sched_freq == AI_CLOCK_ALARM_RETEAT_ONCE) &&
+                (detail_time_posix > 0)) {
+                rt = OPRT_OK;
+            } else if ((operation == AI_CLOCK_ALARM_OPR_DELETE) && (delete_all == TRUE)) {
+                rt = OPRT_OK;
+            } else {
+                rt = OPRT_INVALID_PARM;
+            }
+        }
+    }
+
+    if ((alarm_time_ready == FALSE) && (operation == AI_CLOCK_ALARM_OPR_DELETE) && (delete_all == TRUE)) {
+        rt = OPRT_OK;
+    } else if (alarm_time_ready == FALSE) {
+        TAL_PR_ERR("alarm time info is missing");
+        rt = OPRT_INVALID_PARM;
+    }
+
+    if (rt == OPRT_OK) {
+        TY_AI_CLOCK_ALARM_CFG_T alarm = {
+            .hours = hours,
+            .minutes = minutes,
+            .detail_time = detail_time_posix,
+            .label = label,
+            .repeat_sched_freq = (TY_AI_CLOCK_ALARM_REPEAT_E)repeat_sched_freq,
+            .weekly_recurrence_day = ((mon_of_week << 1) | (tue_of_week << 2) | (wed_of_week << 3) |
+                                      (thu_of_week << 4) | (fri_of_week << 5) | (sat_of_week << 6) |
+                                      (sun_of_week << 0)),
+            .snooze_enabled = snooze_enabled,
+            .snooze_interval_sec = snooze_interval,
+            .snooze_count = snooze_count
+        };
+
+        rt = wukong_clock_set_alarm((TY_AI_CLOCK_ALARM_OPR_TYPE_E)operation, delete_all, &alarm);
+        if (rt == OPRT_OK) {
+            wukong_mcp_return_value_set_bool(ret_val, TRUE);
+        }
+    }
+
+    if (rt != OPRT_OK) {
+        wukong_mcp_return_value_set_bool(ret_val, FALSE);
+    }
+
+    TAL_PR_DEBUG("__set_alarm exit");
+    return rt;
+}
+
+// __set_alarm_query
+STATIC OPERATE_RET __set_alarm_query(CONST MCP_PROPERTY_LIST_T *properties, MCP_RETURN_VALUE_T *ret_val, VOID *user_data)
+{
+    INT_T query_method = 0;
+    CHAR_T *start_time = NULL;
+    CHAR_T *end_time = NULL;
+    CHAR_T *ret_content = NULL;
+
+    TAL_PR_DEBUG("__set_alarm_query enter");
+
+    // Return local alarm data so the LLM can answer voice follow-up questions without needing a screen page.
+    for (INT_T i = 0; i < properties->count; i++) {
+        MCP_PROPERTY_T *prop = properties->properties[i];
+        if (strcmp(prop->name, "query_method") == 0 && prop->type == MCP_PROPERTY_TYPE_INTEGER) {
+            query_method = prop->default_val.int_val;
+            break;
+        }
+    }
+
+    for (INT_T i = 0; i < properties->count; i++) {
+        MCP_PROPERTY_T *prop = properties->properties[i];
+        if (strcmp(prop->name, "start_time") == 0 && prop->type == MCP_PROPERTY_TYPE_STRING) {
+            start_time = prop->default_val.str_val;
+            break;
+        }
+    }
+
+    for (INT_T i = 0; i < properties->count; i++) {
+        MCP_PROPERTY_T *prop = properties->properties[i];
+        if (strcmp(prop->name, "end_time") == 0 && prop->type == MCP_PROPERTY_TYPE_STRING) {
+            end_time = prop->default_val.str_val;
+            break;
+        }
+    }
+
+    TY_AI_CLOCK_ALARM_QUERY_CFG_T alarm_query_info = {
+        .start_time = wukong_clock_time_mktime(start_time),
+        .end_time = wukong_clock_time_mktime(end_time)
+    };
+    ret_content = wukong_clock_set_alarm_query((TY_AI_CLOCK_ALARM_QUERY_METHOD_E)query_method, &alarm_query_info);
+    if (ret_content != NULL) {
+        wukong_mcp_return_value_set_str(ret_val, ret_content);
+        tal_free(ret_content);
+    } else {
+        wukong_mcp_return_value_set_bool(ret_val, TRUE);
+    }
+
+    TAL_PR_DEBUG("__set_alarm_query exit");
+    return OPRT_OK;
+}
+#endif
 
 STATIC OPERATE_RET __set_countdown_timer(CONST MCP_PROPERTY_LIST_T *properties, MCP_RETURN_VALUE_T *ret_val, VOID *user_data)
 {
@@ -484,6 +759,12 @@ OPERATE_RET tuya_ai_toy_mcp_init(VOID)
 {
     OPERATE_RET rt = OPRT_OK;
 
+    TUYA_CALL_ERR_GOTO(wukong_clock_countdown_init(), err);
+
+#if defined(ENABLE_APP_MCP_CLOCK_ALARM) && (ENABLE_APP_MCP_CLOCK_ALARM == 1)
+    TUYA_CALL_ERR_GOTO(wukong_clock_alarm_init(), err);
+#endif
+
     // FIXME: Set actual MCP server name and mcp version
     wukong_mcp_server_init("Tuya MCP Server", "1.0");
 
@@ -532,11 +813,65 @@ OPERATE_RET tuya_ai_toy_mcp_init(VOID)
         NULL,
         MCP_PROP_INT_RANGE("mode", "The desired interaction mode: 'hold_to_talk' (长按对话), 'press_to_talk' (按键对话), 'wake_word' (唤醒模式), or 'free_conversation' (自由对话)", 0, 3)
     ), err);
+
+#if defined(ENABLE_APP_MCP_CLOCK_ALARM) && (ENABLE_APP_MCP_CLOCK_ALARM == 1)
+    TUYA_CALL_ERR_GOTO(WUKONG_MCP_TOOL_ADD(
+        "device_alarm_set",
+        "Set an alarm that triggers at a specific clock time(absolute time like '9:00 AM') with ZERO DURATION. \n"
+        "Supports repetition and snooze.\n"
+        "TYPICAL USER PHRASES:\n"
+        "- 'Wake me up at 7 AM'.\n"
+        "- 'Wake me up at 8 am every Monday morning'.\n"
+        "- 'Remind me tomorrow at 3 PM'.\n"
+        "- 'Set an alarm for 8:00 every morning'.\n"
+        "CRITICAL: \n"
+        "- For one-time alarms, MUST provide detailed timestamp in ISO 8601 format as 'detail_time' parameter.\n"
+        "- For short relative reminders like 'in 10 seconds' or 'in 5 minutes', prefer device_countdown_timer_set.\n"
+        "- Use alarm when ONLY a start time is provided, especially with 'wake', 'remind', 'alert' verbs.\n"
+        "Response:\n"
+        "- Returns true if the alarm was set successfully.",
+        __set_alarm,
+        NULL,
+        MCP_PROP_INT_RANGE("operation",             "Operation type(0=add alarm, 1=delete alarm, 2=update alarm)", 0, 2),
+        MCP_PROP_STR_DEF("alarm_time",              "Absolute time for alarm trigger (format: 'HH:MM' 24-hour, e.g., '07:30')", ""),
+        MCP_PROP_STR_DEF("detail_time",             "Absolute time for alarm trigger (ISO 8601 format). required when repeat_sched_freq is 'once', Example: '2024-01-15T14:30:00'", ""),
+        MCP_PROP_STR_DEF("label",                   "Label for the alarm (e.g., 'Wake Up', 'turn_off_lights', 'send_email(optional)')", ""),
+        MCP_PROP_INT_DEF_RANGE("repeat_sched_freq", "How often the alarm repeats. (0=once, 1=daily, 2=custom_weekly)", 0, 0, 2),
+        MCP_PROP_INT_DEF_RANGE("mon_of_week",       "Selects monday as weekly recurrence days (required when repeat_sched_freq is 'custom_weekly', 0=unselected, 1=selected)", 0, 0, 1),
+        MCP_PROP_INT_DEF_RANGE("tue_of_week",       "Selects tuesday as weekly recurrence days (required when repeat_sched_freq is 'custom_weekly', 0=unselected, 1=selected)", 0, 0, 1),
+        MCP_PROP_INT_DEF_RANGE("wed_of_week",       "Selects wednesday as weekly recurrence days (required when repeat_sched_freq is 'custom_weekly', 0=unselected, 1=selected)", 0, 0, 1),
+        MCP_PROP_INT_DEF_RANGE("thu_of_week",       "Selects thursday as weekly recurrence days (required when repeat_sched_freq is 'custom_weekly', 0=unselected, 1=selected)", 0, 0, 1),
+        MCP_PROP_INT_DEF_RANGE("fri_of_week",       "Selects friday as weekly recurrence days (required when repeat_sched_freq is 'custom_weekly', 0=unselected, 1=selected)", 0, 0, 1),
+        MCP_PROP_INT_DEF_RANGE("sat_of_week",       "Selects saturday as weekly recurrence days (required when repeat_sched_freq is 'custom_weekly', 0=unselected, 1=selected)", 0, 0, 1),
+        MCP_PROP_INT_DEF_RANGE("sun_of_week",       "Selects sunday as weekly recurrence days (required when repeat_sched_freq is 'custom_weekly', 0=unselected, 1=selected)", 0, 0, 1),
+        MCP_PROP_INT_DEF_RANGE("snooze_enabled",    "Whether snooze is enabled. (0=disable, 1=enable)", 0, 0, 1),
+        MCP_PROP_INT_DEF_RANGE("snooze_interval",   "Interval between each snooze (only supports seconds, e.g., '300 seconds'. required if snooze_enabled is 'enable')", 0, 0, 3600),
+        MCP_PROP_INT_DEF_RANGE("snooze_count",      "Maximum snooze count (alarm auto-dismisses after reaching this, required if snooze_enabled is 'enable')", 0, 0, 7),
+        MCP_PROP_BOOL_DEF("delete_all",             "whether to delete all alarms.(required when operation is 'delete alarm', FALSE=delete specific alarm(s), TRUE=delete all alarms)", FALSE)
+    ), err);
+
+    TUYA_CALL_ERR_GOTO(WUKONG_MCP_TOOL_ADD(
+        "device_alarm_query",
+        "Query existing alarms. Filter by time range or select all. \n"
+        "DO NOT USE when:\n"
+        "- User clearly wants to CREATE/SET a new alarm (use device_alarm_set tool)\n"
+        "- Request is straightforward creation without query intent\n"
+        "- Phrases like 'set an alarm', 'wake me up' appear\n"
+        "Response:\n"
+        "- Returns true if the alarm query was set successfully.",
+        __set_alarm_query,
+        NULL,
+        MCP_PROP_INT_DEF_RANGE("query_method",  "Query methods(0=by time range, 1=all)", 0, 0, 1),
+        MCP_PROP_STR_DEF("start_time",          "Query start time (ISO 8601 format). Example: '2024-01-15T14:30:00'", ""),
+        MCP_PROP_STR_DEF("end_time",            "Query end time (ISO 8601 format). Example: '2024-01-15T16:00:00'", "")
+    ), err);
+#endif
     
     // set countdown timer tool
     TUYA_CALL_ERR_GOTO(WUKONG_MCP_TOOL_ADD(
         "device_countdown_timer_set",
-        "Set a countdown timer. Supports multiple time formats: seconds, minutes, hours\n"
+        "Set a countdown timer. Supports multiple time formats: seconds, minutes, hours.\n"
+        "Use this for short relative reminders like 'remind me in 10 seconds' or 'set a timer for 5 minutes'.\n"
         "Parameters:\n"
         "- hour_duration (int):     The Specified countdown hours duration (0-24).\n"
         "- minute_duration (int):   The Specified countdown minutes duration (0-60).\n"
@@ -663,6 +998,10 @@ err:
 
 OPERATE_RET tuya_ai_toy_mcp_deinit(VOID)
 {
+    wukong_clock_countdown_deinit();
+#if defined(ENABLE_APP_MCP_CLOCK_ALARM) && (ENABLE_APP_MCP_CLOCK_ALARM == 1)
+    wukong_clock_alarm_deinit();
+#endif
     wukong_mcp_server_destroy();
     TAL_PR_DEBUG("MCP Server deinitialized successfully");
     return OPRT_OK;

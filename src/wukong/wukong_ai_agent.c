@@ -186,9 +186,24 @@ OPERATE_RET wukong_ai_agent_deinit(VOID)
 OPERATE_RET wukong_ai_agent_send_text(CHAR_T *content)
 {
     OPERATE_RET rt = OPRT_OK;
-    // tuya_ai_input_start(TRUE);
-    TUYA_CALL_ERR_RETURN(tuya_ai_text_input((BYTE_T *)content, strlen(content), strlen(content)));
-    // tuya_ai_input_stop();
+
+    TUYA_CHECK_NULL_RETURN(content, OPRT_INVALID_PARM);
+    if (strlen(content) == 0) {
+        return OPRT_INVALID_PARM;
+    }
+    if (tuya_ai_agent_is_ready() == FALSE) {
+        TAL_PR_ERR("%s: ai agent is not ready", __func__);
+        return OPRT_RESOURCE_NOT_READY;
+    }
+
+    // 文本提醒也按一轮完整会话处理，避免设备空闲时只收到了文本却没有真正触发 TTS。
+    tuya_ai_agent_event(AI_EVENT_CHAT_BREAK, 0);
+    tuya_ai_agent_set_scode(AI_AGENT_SCODE_DEFAULT);
+    tuya_ai_input_start(TRUE);
+    rt = tuya_ai_text_input((BYTE_T *)content, strlen(content), strlen(content));
+    tuya_ai_input_stop();
+    TUYA_CALL_ERR_RETURN(rt);
+
     return rt;
 }
 
